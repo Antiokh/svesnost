@@ -45,7 +45,7 @@ test('mobile popover retains Escape and contains compact preferences', async ({ 
 test('desktop three-position theme switch works with keyboard', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop');
   await page.goto('/en/');
-  const theme = page.locator('[data-sves-theme-slider]');
+  const theme = page.locator('.right-group [data-sves-theme-slider]');
   await expect(theme).toBeVisible();
   await theme.focus();
   await theme.press('End');
