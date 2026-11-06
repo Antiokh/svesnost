@@ -343,7 +343,9 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
                 parens -= 1
                 if parens == 0:
                     spans.append((pos, cursor + 1, label_start, label_end, image))
-                    pos = cursor + 1
+                    # Inspect the label as well: [![alt](src)](href) contains
+                    # an image whose alt must be excluded independently.
+                    pos = label_start
                     break
             cursor += 1
         else:
