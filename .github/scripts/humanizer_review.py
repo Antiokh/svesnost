@@ -119,7 +119,8 @@ def prose_only(raw: str) -> str:
         fence = FENCE.match(line)
         if in_fence:
             hide(chars, offset, offset + len(line))
-            if trimmed.startswith(in_fence[0] * len(in_fence)):
+            if (trimmed.rstrip().startswith(in_fence[0] * in_fence[1])
+                    and not trimmed.rstrip().lstrip(in_fence[0]).strip()):
                 in_fence = None
         elif fence:
             marker = fence.group(1)
