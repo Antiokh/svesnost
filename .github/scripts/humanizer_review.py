@@ -409,6 +409,63 @@ def mask_inline_paren_math(chars: list[str]) -> None:
 
 
 
+def find_matching_raw_close(text: str, opening_end: int, tag: str) -> int | None:
+    """Find the corresponding closing tag, respecting nested same-name tags."""
+    pattern = re.compile(r"</?" + re.escape(tag) + r"(?=[\s/>])", re.I)
+    depth = 1
+    pos = opening_end
+    while match := pattern.search(text, pos):
+        start = match.start()
+        end = end_tag(text, start)
+        if end <= start or end == len(text) and ">" not in text[start:end]:
+            return None
+        if text.startswith("</", start):
+            depth -= 1
+            if depth == 0:
+                return end
+        elif not text[start:end].rstrip().endswith("/>"):
+            depth += 1
+        pos = end
+    return None
+
+
+def mask_fenced_blocks(text: str, chars: list[str]) -> None:
+    """Mask code fences including list-indented and quoted Markdown fences.
+
+    Existing masks (e.g. raw HTML code containers) are respected, so fences
+    inside them cannot hide following reader-visible prose.
+    """
+    offset = 0
+    in_fence = None
+    list_indents: list[tuple[int, int]] = []
+    for line in "".join(chars).splitlines(keepends=True):
+        trimmed = line.lstrip()
+        indent = len(line) - len(trimmed)
+        if not in_fence:
+            marker = re.match(r"^( *)(?:[-*+]|\d+[.)])\s+", line)
+            if marker:
+                if indent < 4 or list_indents:
+                    while list_indents and list_indents[-1][0] >= indent:
+                        list_indents.pop()
+                    list_indents.append((indent, len(marker.group(0))))
+            elif trimmed.strip() and list_indents and indent < list_indents[0][1]:
+                list_indents.clear()
+        fence_text, quote_depth = _fence_line(line, list_indents)
+        fence = FENCE.match(fence_text)
+        if in_fence:
+            hide(chars, offset, offset + len(line))
+            if (quote_depth == in_fence[2] and fence
+                    and fence.group(1)[0] == in_fence[0]
+                    and len(fence.group(1)) >= in_fence[1]
+                    and not fence_text[fence.end():].strip()):
+                in_fence = None
+        elif fence:
+            token = fence.group(1)
+            in_fence = (token[0], len(token), quote_depth)
+            hide(chars, offset, offset + len(line))
+        offset += len(line)
+
+
 def mask_mdx_esm(text: str, chars: list[str]) -> None:
     """Exclude whole top-level import/export declarations, including newlines.
 
@@ -421,7 +478,7 @@ def mask_mdx_esm(text: str, chars: list[str]) -> None:
     quote = ""
     block_comment = False
     offset = 0
-    for line in text.splitlines(keepends=True):
+    for line in "".join(chars).splitlines(keepends=True):
         if not active:
             if not MODULE.match(line):
                 offset += len(line)
@@ -471,24 +528,10 @@ def mask_raw_elements_before_blocks(text: str, chars: list[str]) -> None:
     """
     view_chars = list("".join(chars))
     mask_inline_link_targets(text, view_chars)
-    # A raw-looking tag written inside ordinary fenced code is just code.
-    offset = 0
-    fence = None
-    for line in text.splitlines(keepends=True):
-        visible, depth = _unquote_line(line)
-        marker = FENCE.match(visible)
-        if fence:
-            hide(view_chars, offset, offset + len(line))
-            if (depth == fence[2] and marker
-                    and marker.group(1)[0] == fence[0]
-                    and len(marker.group(1)) >= fence[1]
-                    and not visible[marker.end():].strip()):
-                fence = None
-        elif marker:
-            token = marker.group(1)
-            fence = (token[0], len(token), depth)
-            hide(view_chars, offset, offset + len(line))
-        offset += len(line)
+    # Use the same list-aware fence rules as the main Markdown scanner.
+    # This shadow mask prevents a literal <pre> within fenced code from being
+    # mistaken for an opening raw element.
+    mask_fenced_blocks(text, view_chars)
     view = "".join(view_chars)
     pos = 0
     while pos < len(text):
@@ -514,8 +557,8 @@ def mask_raw_elements_before_blocks(text: str, chars: list[str]) -> None:
         end = end_tag(text, pos)
         if (tag.lower() in RAW_ELEMENTS and not view.startswith("</", pos)
                 and not text[pos:end].rstrip().endswith("/>")):
-            close = re.search(r"</" + re.escape(tag) + r"\s*>", text[end:], re.I)
-            stop = end + close.end() if close else len(text)
+            close_end = find_matching_raw_close(text, end, tag)
+            stop = close_end if close_end is not None else len(text)
             hide(chars, pos, stop)
             pos = stop
         else:
@@ -592,11 +635,13 @@ def mask_html_comments_in_line(
 def prose_only(raw: str) -> str:
     text = body_without_frontmatter(raw)
     chars = list(text)
-    # Exclude complete ESM declarations and raw-code containers before
-    # interpreting Markdown fences/math/comments, so code cannot alter the
-    # state of the reader-visible block scanner.
-    mask_mdx_esm(text, chars)
+    # Respect code context before detecting ESM: an incomplete "import {"
+    # inside a fence must not consume the next reader-visible paragraph.
+    # Raw containers are masked first so their internal ~~~ and $ cannot
+    # alter the state of the block or ESM scanner.
     mask_raw_elements_before_blocks(text, chars)
+    mask_fenced_blocks(text, chars)
+    mask_mdx_esm(text, chars)
     block_text = "".join(chars)
     offset = 0
     in_fence = None
@@ -738,11 +783,10 @@ def prose_only(raw: str) -> str:
                 selfclosing = text[pos:end].rstrip().endswith("/>")
                 hide(chars, pos, end)
                 if tagname.lower() in RAW_ELEMENTS and not closing and not selfclosing:
-                    close = re.search(r"</" + re.escape(tagname) + r"\s*>", text[end:], re.I)
-                    if close:
-                        stop = end + close.end()
-                        hide(chars, end, stop)
-                        end = stop
+                    close_end = find_matching_raw_close(text, end, tagname)
+                    if close_end is not None:
+                        hide(chars, end, close_end)
+                        end = close_end
                     elif tagname.lower() in TABLE_ELEMENTS:
                         # Fail closed for malformed/unclosed table elements.
                         hide(chars, end, len(text))
