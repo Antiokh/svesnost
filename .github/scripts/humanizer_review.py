@@ -404,6 +404,29 @@ def valid_inline_link_payload(payload: str) -> bool:
     return False
 
 
+def markdown_bracket_pairs(text: str) -> dict[int, int]:
+    """Match link-label brackets in one pass, even for unclosed '[' runs."""
+    pairs: dict[int, int] = {}
+    stack: list[int] = []
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char == "\\" and index + 1 < len(text):
+            index += 2
+            continue
+        if char == "\n" and (
+            text.startswith("\n", index + 1)
+            or text.startswith("\r\n", index + 1)
+        ):
+            stack.clear()  # A blank line cannot occur inside link text.
+        if char == "[":
+            stack.append(index)
+        elif char == "]" and stack:
+            pairs[stack.pop()] = index
+        index += 1
+    return pairs
+
+
 def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
     """Find complete inline links/images, balancing destination parentheses.
 
@@ -411,6 +434,7 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
     The title may be quoted, so a ')' inside a title is not a link closer.
     """
     spans = []
+    pairs = markdown_bracket_pairs(text)
     pos = 0
     while pos < len(text):
         image = text.startswith("![", pos)
@@ -420,32 +444,12 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
             pos += 1
             continue
         label_start = bracket + 1
-        cursor = label_start
-        nested = 1
-        while cursor < len(text):
-            # Link labels may contain soft line breaks, but not blank lines
-            # (which would end the surrounding Markdown paragraph).
-            if text[cursor] == "\n" and (
-                cursor + 1 >= len(text)
-                or text[cursor + 1] == "\n"
-                or text[cursor + 1] == "\r"
-            ):
-                break
-            if text[cursor] == "\\" and cursor + 1 < len(text):
-                cursor += 2
-                continue
-            if text[cursor] == "[":
-                nested += 1
-            elif text[cursor] == "]":
-                nested -= 1
-                if nested == 0:
-                    break
-            cursor += 1
-        if nested or cursor + 1 >= len(text) or text[cursor + 1] != "(":
+        label_end = pairs.get(bracket)
+        if (label_end is None or label_end + 1 >= len(text)
+                or text[label_end + 1] != "("):
             pos += 1
             continue
-        label_end = cursor
-        cursor += 2
+        cursor = label_end + 2
         parens = 1
         title_quote = None
         angle_destination = False
