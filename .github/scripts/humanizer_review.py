@@ -1341,14 +1341,14 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     # Display math within quoted/list containers is code-like math, not
     # reader-visible text; the next paragraph must survive closing markers.
     math_samples = (
-        ("> $\n> E=mc^2\n> $\n> Видимый абзац.\n",
-         "Видимый абзац"),
+        ("> " + chr(36) * 2 + "\n> E=mc^2\n> " + chr(36) * 2
+         + "\n> Видимый абзац.\n", "Видимый абзац"),
         ("> \\[\n> x^2+y^2\n> \\]\n> Проза цитаты.\n",
          "Проза цитаты"),
-        ("- Видимый пункт\n  $\n  x^2+y^2\n  $\nПосле списка.\n",
-         "После списка"),
-        ("- $\n  E=mc^2\n  $\nПосле формулы.\n",
-         "После формулы"),
+        ("- Видимый пункт\n  " + chr(36) * 2 + "\n  x^2+y^2\n  "
+         + chr(36) * 2 + "\nПосле списка.\n", "После списка"),
+        ("- " + chr(36) * 2 + "\n  E=mc^2\n  " + chr(36) * 2
+         + "\nПосле формулы.\n", "После формулы"),
     )
     for sample, visible in math_samples:
         extracted = prose_only(sample)
