@@ -21,7 +21,15 @@ CYRILLIC = re.compile(r"[\u0400-\u04ff]")
 FENCE = re.compile(r"^ {0,3}(" + chr(96) + r"{3,}|~{3,})")
 REFERENCE = re.compile(r"^ {0,3}\[(?!\^)[^\]]+\]:\s")
 MODULE = re.compile(r"^\s*(?:import|export)\s+")
-RAW_ELEMENTS = ("script", "style", "CodeBlock", "pre", "code")
+RAW_ELEMENTS = frozenset({
+    "script", "style", "codeblock", "pre", "code",
+    "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+    "smarttable", "structtable", "supabasetable", "sanitytable",
+})
+TABLE_ELEMENTS = frozenset({
+    "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+    "smarttable", "structtable", "supabasetable", "sanitytable",
+})
 
 
 def language(path: str) -> str | None:
@@ -110,15 +118,49 @@ def end_tag(text: str, start: int) -> int:
 
 
 def _table_cells(line: str) -> list[str] | None:
-    """Split a possible GFM row by unescaped pipes, including borderless tables."""
+    """Split GFM cells on unescaped pipes outside matched backtick code spans."""
     row = line.strip()
-    if not re.search(r"(?<!\\)\|", row):
+    cells = []
+    cell_start = 0
+    delimiters = []
+    i = 0
+    while i < len(row):
+        if row[i] == "\\" and i + 1 < len(row):
+            i += 2
+            continue
+        if row[i] == chr(96):
+            ticks = len(row) - len(row[i:].lstrip(chr(96)))
+            j = i + ticks
+            closing = None
+            while j < len(row):
+                if row[j] == "\\" and j + 1 < len(row):
+                    j += 2
+                elif row[j] == chr(96):
+                    close_ticks = len(row) - len(row[j:].lstrip(chr(96)))
+                    if close_ticks == ticks:
+                        closing = j + close_ticks
+                        break
+                    j += close_ticks
+                else:
+                    j += 1
+            if closing is not None:
+                i = closing
+                continue
+            i += ticks
+            continue
+        if row[i] == "|":
+            cells.append(row[cell_start:i].strip())
+            delimiters.append(i)
+            cell_start = i + 1
+        i += 1
+    if not delimiters:
         return None
-    if row.startswith("|"):
-        row = row[1:]
-    if row.endswith("|") and not row.endswith(r"\|"):
-        row = row[:-1]
-    return [cell.strip() for cell in re.split(r"(?<!\\)\|", row)]
+    cells.append(row[cell_start:].strip())
+    if delimiters[0] == 0:
+        cells.pop(0)
+    if delimiters[-1] == len(row) - 1:
+        cells.pop()
+    return cells
 
 
 def mask_gfm_tables(text: str, chars: list[str]) -> None:
@@ -261,12 +303,16 @@ def prose_only(raw: str) -> str:
                 closing = text.startswith("</", pos)
                 selfclosing = text[pos:end].rstrip().endswith("/>")
                 hide(chars, pos, end)
-                if tagname in RAW_ELEMENTS and not closing and not selfclosing:
+                if tagname.lower() in RAW_ELEMENTS and not closing and not selfclosing:
                     close = re.search(r"</" + re.escape(tagname) + r"\s*>", text[end:], re.I)
                     if close:
                         stop = end + close.end()
                         hide(chars, end, stop)
                         end = stop
+                    elif tagname.lower() in TABLE_ELEMENTS:
+                        # Fail closed for malformed/unclosed table elements.
+                        hide(chars, end, len(text))
+                        end = len(text)
                 pos = end
                 continue
         if text[pos] == "{":
