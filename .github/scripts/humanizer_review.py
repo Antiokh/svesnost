@@ -870,6 +870,41 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         assert value in result, ("missing prose", value, result)
     for value in forbidden:
         assert value not in result, ("leaked markup", value, result)
+
+    # Markdown link destinations have nested parentheses and quoted titles.
+    # None of their technical fragments may enter Humanizer; labels and prose
+    # beside links remain reader-visible.
+    link_cases = (
+        ("[Текст](https://example.org/path_(foo)more) обычная проза.",
+         ("Текст", "обычная проза"), ("example.org", "foo", "more")),
+        ("См. https://example.org/path_(foo)more и далее.",
+         ("См.", "и далее"), ("example.org", "foo", "more")),
+        ('[Документ](https://example.org "подпись <!--")\nСледующий абзац.',
+         ("Документ", "Следующий абзац"), ("example.org", "подпись", "<!--")),
+        ('До [Файл](https://example.org/path_(foo)more "подпись <!-- (x)")'
+         ' после ссылки.\nСледующий абзац.',
+         ("До", "Файл", "после ссылки", "Следующий абзац"),
+         ("example.org", "foo", "more", "подпись", "<!--")),
+    )
+    for sample, visible, hidden in link_cases:
+        extracted = prose_only(sample)
+        for fragment in visible:
+            assert fragment in extracted, ("link lost prose", fragment, extracted)
+        for fragment in hidden:
+            assert fragment not in extracted, ("link leaked metadata", fragment, extracted)
+    img = prose_only("Вводный текст ![СЕКРЕТНЫЙ ALT](https://example.org/x_(y).png) конец.")
+    assert "Вводный текст" in img and "конец" in img, img
+    assert "СЕКРЕТНЫЙ" not in img and "example.org" not in img, img
+
+    # An escaped Markdown literal \\( is not a TeX opener. It must not pair
+    # with the closing delimiter of a later, real inline formula.
+    quoted_tex = r"До \\( буквально. Важная проза после литерала. \(x+1\) Конец."
+    quoted_tex_body = prose_only(quoted_tex)
+    for fragment in ("До", "буквально", "Важная проза после литерала", "Конец"):
+        assert fragment in quoted_tex_body, ("literal ate prose", fragment, quoted_tex_body)
+    assert "x+1" not in quoted_tex_body, quoted_tex_body
+    assert "После" in prose_only(r"После \\( литерала без формулы.")
+
     assert language(DOCS + "ru/story.md") == "ru"
     assert language(DOCS + "en/story.md") is None
     assert language(DOCS + "story.mdx") == "sr"
