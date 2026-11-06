@@ -1225,6 +1225,20 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         assert hidden_text not in clickable_body, (hidden_text, clickable_body)
     assert len(markdown_inline_links("[![alt](src)](href)")) == 2
 
+    # CommonMark allows a link title to begin on the next line. The
+    # destination and title remain metadata, while the label is visible.
+    for title in ('СЕКРЕТНОЕ TITLE', 'СЕКРЕТНОЕ TITLE <!--'):
+        multiline_link = (
+            "До [Документ](/materials/page\n"
+            + '  "' + title + '") после.\n'
+            + "Следующий абзац.\n"
+        )
+        extracted = prose_only(multiline_link)
+        for visible in ("До", "Документ", "после", "Следующий абзац"):
+            assert visible in extracted, ("multiline link lost prose", visible, extracted)
+        for hidden in ("/materials/page", "СЕКРЕТНОЕ TITLE", "<!--"):
+            assert hidden not in extracted, ("multiline link metadata leaked", hidden, extracted)
+
     # An escaped Markdown literal \\( is not a TeX opener. It must not pair
     # with the closing delimiter of a later, real inline formula.
     quoted_tex = r"До \\( буквально. Важная проза после литерала. \(x+1\) Конец."
@@ -1323,6 +1337,25 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "Проза до формулы." in isolated and "Содержимое примечания" in isolated
     assert "И проза после." in isolated and "x^2" not in isolated
     assert "---" not in isolated and ":::note" not in isolated and chr(36) * 2 not in isolated
+
+    # Display math within quoted/list containers is code-like math, not
+    # reader-visible text; the next paragraph must survive closing markers.
+    math_samples = (
+        ("> $\n> E=mc^2\n> $\n> Видимый абзац.\n",
+         "Видимый абзац"),
+        ("> \\[\n> x^2+y^2\n> \\]\n> Проза цитаты.\n",
+         "Проза цитаты"),
+        ("- Видимый пункт\n  $\n  x^2+y^2\n  $\nПосле списка.\n",
+         "После списка"),
+        ("- $\n  E=mc^2\n  $\nПосле формулы.\n",
+         "После формулы"),
+    )
+    for sample, visible in math_samples:
+        extracted = prose_only(sample)
+        assert visible in extracted, ("display math swallowed prose", sample, extracted)
+        assert "E=mc^2" not in extracted and "x^2+y^2" not in extracted, (
+            "display math leaked", sample, extracted
+        )
 
     # Fenced code is authoritative: math-looking lines inside must not open math
     # blocks that swallow the paragraph after the closing code fence.
@@ -1541,6 +1574,35 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "документ" in reference_body, reference_body
     for hidden in ("[source]", "[cover]", "изображение", "example.org", "[]"):
         assert hidden not in reference_body, (hidden, reference_body)
+    # Shortcut image references are images only when their label resolves.
+    shortcut = (
+        "Видимый текст до.\n"
+        "![СЕКРЕТНЫЙ ALT]\n"
+        "[СЕКРЕТНЫЙ ALT]: /img.png\n"
+        "![НЕОПРЕДЕЛЁННЫЙ ЛИТЕРАЛ]\n"
+        "Видимый текст после.\n"
+    )
+    shortcut_text = prose_only(shortcut)
+    for item in ("Видимый текст до", "Видимый текст после", "НЕОПРЕДЕЛЁННЫЙ ЛИТЕРАЛ"):
+        assert item in shortcut_text, ("reference shortcut lost prose", item, shortcut_text)
+    for item in ("СЕКРЕТНЫЙ ALT", "/img.png"):
+        assert item not in shortcut_text, ("reference shortcut leaked metadata", item, shortcut_text)
+
+    # Reference definitions, including inside blockquotes, hide the entire
+    # destination and a continuation title on the next line.
+    long_reference = (
+        "[ref]: /page\n"
+        '  "СЕКРЕТНОЕ TITLE"\n'
+        "\n"
+        "> [other]: /hidden\n"
+        "\n"
+        "Обычный абзац.\n"
+    )
+    long_ref_text = prose_only(long_reference)
+    assert "Обычный абзац." in long_ref_text, long_ref_text
+    for hidden in ("СЕКРЕТНОЕ TITLE", "/page", "/hidden", "[other]:"):
+        assert hidden not in long_ref_text, ("definition leaked metadata", hidden, long_ref_text)
+
     # Entire GFM table blocks are structural data, with or without border pipes.
     table = """Текст до таблицы.
 
@@ -1624,6 +1686,22 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
             assert value in result, ("lost prose beside table", value, result)
         for value in hidden:
             assert value not in result, ("HTML/JSX table leaked", value, result)
+
+    # Attribute values can contain tag-like text or <!-- without being
+    # actual tag/comment tokens. Only the outer raw table may end its mask.
+    raw_attrs = (
+        '<table><tr><td title="</table>">СЕКРЕТНЫЕ ДАННЫЕ</td></tr></table>\n'
+        "Видимая проза после первой таблицы.\n",
+        '<table><td title="<!--">ДАННЫЕ ВТОРОЙ ТАБЛИЦЫ</td></table>\n'
+        "Видимая проза после второй таблицы.\n",
+    )
+    for source, visible, hidden in (
+        (raw_attrs[0], "Видимая проза после первой таблицы", "СЕКРЕТНЫЕ ДАННЫЕ"),
+        (raw_attrs[1], "Видимая проза после второй таблицы", "ДАННЫЕ ВТОРОЙ ТАБЛИЦЫ"),
+    ):
+        extracted = prose_only(source)
+        assert visible in extracted, ("tag attribute swallowed prose", extracted)
+        assert hidden not in extracted, ("tag attribute leaked raw data", extracted)
 
     # Multi-line list-indented code remains code until it dedents, including
     # after intervening blank lines and with Markdown-like syntax inside code.
