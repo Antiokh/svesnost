@@ -14,7 +14,8 @@
     "test:ui": "playwright test",
     "test:model": "node scripts/check-entity-model.mjs",
     "build:data": "node scripts/build-entities.mjs",
-    "test:integration": "node scripts/check-entity-integration.mjs"
+    "test:integration": "node scripts/check-entity-integration.mjs",
+    "test:dev": "node scripts/check-entity-dev.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.42.4",

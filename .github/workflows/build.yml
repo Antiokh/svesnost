@@ -29,3 +29,5 @@ jobs:
         run: npm run test:ui
       - name: Synthetic entity layout and map integration
         run: npm run test:integration
+      - name: Live development entity refresh
+        run: npm run test:dev
