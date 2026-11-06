@@ -19,7 +19,7 @@ MARKER = "<!-- svesnost-humanizer-review -->"
 DOCS = "src/content/docs/"
 CYRILLIC = re.compile(r"[\u0400-\u04ff]")
 FENCE = re.compile(r"^ {0,3}(" + chr(96) + r"{3,}|~{3,})")
-REFERENCE = re.compile(r"^ {0,3}\[(?!\^)[^\]]+\]:\s")
+REFERENCE = re.compile(r"^ {0,3}\[(?!\^)[^\]]+\]:[ \t]*(?=\S)")
 MODULE = re.compile(r"^\s*(?:import|export)\s+")
 RAW_ELEMENTS = frozenset({
     "script", "style", "codeblock", "pre", "code",
@@ -231,7 +231,22 @@ def mask_gfm_tables(text: str, chars: list[str]) -> None:
         end_index = index + 1
         while end_index < len(lines):
             row_text, row_depth = _unquote_line(lines[end_index])
-            if row_depth != depth or not _table_cells(row_text):
+            # A GFM row may omit pipes entirely (only its first cell then
+            # contains text). The table ends at a blank line, a new block,
+            # or when the surrounding blockquote changes depth.
+            if row_depth != depth or not row_text.strip():
+                break
+            if re.match(
+                r"^ {0,3}(?:#{1,6}(?:[ \t]|$)|"
+                r"(?:[-*+]|\d+[.)])[ \t]+|"
+                r"`{3,}|~{3,}|"
+                r"(?:---|\*\*\*|___)[ \t]*$|"
+                r"<(?:[A-Za-z/!]))",
+                row_text
+            ):
+                break
+            row_start = starts[end_index]
+            if not any(c.strip() for c in chars[row_start:row_start + len(lines[end_index])]):
                 break
             end_index += 1
         for line_index in range(index - 1, end_index):
@@ -335,6 +350,8 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
         cursor += 2
         parens = 1
         title_quote = None
+        angle_destination = False
+        destination_started = False
         while cursor < len(text):
             char = text[cursor]
             if char == "\n":
@@ -347,6 +364,20 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
             if char == "\\" and cursor + 1 < len(text):
                 cursor += 2
                 continue
+            if angle_destination:
+                # A <destination> may contain unbalanced parentheses; only
+                # the closing > ends it, not an intervening ).
+                if char == ">":
+                    angle_destination = False
+                cursor += 1
+                continue
+            if char == "<" and not destination_started and not title_quote:
+                angle_destination = True
+                destination_started = True
+                cursor += 1
+                continue
+            if not char.isspace():
+                destination_started = True
             if title_quote:
                 if char == title_quote:
                     title_quote = None
@@ -397,7 +428,7 @@ def mask_reference_definitions(text: str, chars: list[str]) -> set[str]:
         offset += len(line)
     for index, line in enumerate(lines):
         visible, quote_depth = _unquote_line(line)
-        match = re.match(r"^ {0,3}\[([^\]\n]+)\]:[ \t]+(\S.*)$",
+        match = re.match(r"^ {0,3}\[([^\]\n]+)\]:[ \t]*(\S.*)$",
                          visible.rstrip("\r\n"))
         if not match or match.group(1).startswith("^"):
             continue
