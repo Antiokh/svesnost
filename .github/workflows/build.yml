@@ -21,3 +21,5 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Build static site
         run: npm run build
+      - name: Check language isolation
+        run: npm run test:i18n
