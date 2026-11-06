@@ -1,0 +1,65 @@
+---
+import { getEntityPageData } from '../lib/entity-pages.mjs';
+import { formatEntityDate, sortEventRows, labels } from '../lib/entity-display.mjs';
+const page = getEntityPageData(Astro.locals.starlightRoute);
+const { item, sections, locale } = page ?? { item:null, sections:[], locale:'sr' };
+const words = labels[locale];
+const byKey = (key) => sections.find((s)=>s.key === key)?.items ?? [];
+const detail = (entry) => entry.entity === 'event'
+  ? formatEntityDate(entry.date,locale) : entry.entity === 'evidence'
+    ? entry.assessment : entry.entity === 'person'
+      ? formatEntityDate(entry.born?.date,locale) : '';
+const order = ['events', 'people', 'relations', 'places', 'sources', 'evidence', 'media'];
+const arranged = order.map((key)=>({key,items:byKey(key)}))
+  .filter((s)=>s.items.length)
+  .map((s)=>({...s,items:s.key==='events'?[...s.items].sort(sortEventRows):s.items}));
+const view = (locale==='sr' ? '/' : `/${locale}/`) + 'events/map/';
+const hasGeoEvents = item?.entity === 'place' && Boolean(item.geo) && byKey('events').length
+  || item?.entity === 'event' && byKey('places').some((r)=>Boolean(r.geo))
+  || item?.entity === 'person' && byKey('events').some((event) =>
+    (event.places??[]).some((place)=>Boolean(page && page.sections.some((s)=>s.key==='places'&&s.items.some((p)=>p.id===place&&p.geo)))));
+function relationDescription(target) {
+  if (item?.entity !== 'person') return '';
+  const outward = (item.relations ?? []).find((rel)=>rel.target === target.id);
+  if (outward) return [outward.kind, outward.role, outward.assessment].filter(Boolean).join(' · ');
+  const inward = (target.relations ?? []).find((rel)=>rel.target === item.id);
+  return inward ? [inward.kind, inward.role, inward.assessment].filter(Boolean).join(' · ') : '';
+}
+---
+{item && arranged.map((section)=> (
+  <section class="entity-auto-section" aria-labelledby={`entity-${section.key}`} data-entity-section={section.key}>
+    <h2 id={`entity-${section.key}`}>{words[section.key]}</h2>
+    <ol class:list={['entity-linked-items',section.key==='events'&&'entity-chronology']}>
+      {section.items.map((linked)=>(
+        <li>
+          <a href={linked.url}>{linked.title}</a>
+          {section.key==='events' && linked.date && (
+            <time class="entity-detail">{formatEntityDate(linked.date,locale)}{linked.endDate ? ' — '+formatEntityDate(linked.endDate,locale) : ''}</time>
+          )}
+          {section.key==='relations' && relationDescription(linked) && (
+            <span class="entity-detail">{relationDescription(linked)}</span>
+          )}
+          {section.key!=='events' && section.key!=='relations' && detail(linked) && <span class="entity-detail">{detail(linked)}</span>}
+          {section.key==='events' && (linked.summary || linked.description) && <p>{linked.summary || linked.description}</p>}
+          {section.key==='evidence' && linked.claim && <p>{linked.claim}</p>}
+          {section.key==='media' && linked.caption && <p>{linked.caption}</p>}
+        </li>
+      ))}
+    </ol>
+  </section>
+))}
+{item && hasGeoEvents && (
+  <p class="entity-map-link">
+    <a href={view + (item.entity==='person' ? '?person='+encodeURIComponent(item.id) : '')}>{words.map}</a>
+  </p>
+)}
+<style>
+  .entity-auto-section { margin-block-start: 2.5rem; }
+  .entity-linked-items { padding-inline-start: 1.35rem; }
+  .entity-linked-items > li { margin-block: 0.65rem; }
+  .entity-chronology > li { padding-block: 0.45rem; border-bottom: 1px solid var(--sl-color-hairline); }
+  .entity-chronology > li:last-child { border-bottom: none; }
+  .entity-linked-items p { margin-block: 0.3rem; color: var(--sl-color-gray-2); font-size: var(--sl-text-sm); }
+  .entity-detail { margin-inline-start: 0.6rem; font-size: var(--sl-text-sm); color: var(--sl-color-gray-3); }
+  .entity-map-link { margin-block-start: 1.5rem; font-size: var(--sl-text-sm); }
+</style>

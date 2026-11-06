@@ -16,6 +16,8 @@ export default defineConfig({
         Header: './src/components/Header.astro',
         LanguageSelect: './src/components/LanguageSelect.astro',
         ThemeSelect: './src/components/ThemeSelect.astro',
+        PageTitle: './src/components/EntityPageTitle.astro',
+        MarkdownContent: './src/components/EntityMarkdownContent.astro',
       },
       customCss: ['./src/styles/theme.css'],
       logo: { src: './src/assets/logo.svg', alt: 'Свесност' },

@@ -1,6 +1,8 @@
 import { getCollection } from 'astro:content';
 import { defineRouteMiddleware } from '@astrojs/starlight/route-data';
 import { validateEntityCatalog } from './lib/entity-catalog.mjs';
+import { getEntityPageData } from './lib/entity-pages.mjs';
+import { labels } from './lib/entity-display.mjs';
 
 /** Routes belonging to real authored pages, never Starlight's generated fallbacks. */
 const authoredDocs = await getCollection('docs', ({ data }) => !data.draft);
@@ -39,6 +41,23 @@ export const onRequest = defineRouteMiddleware((context) => {
   }
   if (route.pagination.next && !published.has(normalize(route.pagination.next.href))) {
     route.pagination.next = undefined;
+  }
+  if (!route.isFallback && route.toc && route.entry.data.entityId) {
+    const entityPage = getEntityPageData(route);
+    if (entityPage?.sections.length) {
+      route.toc = {
+        ...route.toc,
+        items: [
+          ...route.toc.items,
+          ...entityPage.sections.map(({ key }) => ({
+            depth: 2,
+            slug: 'entity-' + key,
+            text: labels[entityPage.locale][key],
+            children: [],
+          })),
+        ],
+      };
+    }
   }
   if (route.isFallback) {
     // Keep Starlight's fallback URLs out of search engines and the Pagefind index.

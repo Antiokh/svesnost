@@ -1,0 +1,36 @@
+---
+// Minimal semantic entity header. Starlight owns typography; no genealogy album layout.
+import DefaultTitle from '@astrojs/starlight/components/PageTitle.astro';
+import { getEntityPageData } from '../lib/entity-pages.mjs';
+import { formatEntityDate, labels } from '../lib/entity-display.mjs';
+const page = getEntityPageData(Astro.locals.starlightRoute);
+const item = page?.item;
+const l = labels[page?.locale ?? 'sr'];
+const details = item?.entity === 'person'
+  ? [item.born?.date && formatEntityDate(item.born.date,page.locale), item.died?.date && formatEntityDate(item.died.date,page.locale)]
+  : item?.entity === 'event'
+    ? [item.date && formatEntityDate(item.date,page.locale), item.endDate && formatEntityDate(item.endDate,page.locale)]
+    : item?.entity === 'place'
+      ? [item.country]
+      : [];
+const subtitle = details.filter(Boolean).join(' – ');
+---
+<DefaultTitle />
+{item && ['person','event','place'].includes(item.entity) && (
+  <p class="entity-subtitle" data-entity-layout={item.entity}>
+    <span class="entity-kind">{l[item.entity]}</span>
+    {subtitle && <span class="entity-period">{subtitle}</span>}
+  </p>
+)}
+<style>
+  .entity-subtitle {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.55rem 1rem;
+    align-items: baseline;
+    margin-block: 0.6rem 0;
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-sm);
+  }
+  .entity-kind { font-weight: 600; color: var(--sl-color-text-accent); }
+</style>
