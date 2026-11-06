@@ -50,4 +50,30 @@ assert.throws(() => validateEntityCatalog([...records, entry('people/self', 'per
 assert.throws(() => validateEntityCatalog([...records, entry('media/bad', 'media', 'media:bad', { subjects: ['place:city'] })]), /expected person reference/);
 assert.equal(schema.safeParse({ entity: 'place', entityId: 'place:invalid', geo: { latitude: 400, longitude: 20 } }).success, false);
 assert.equal(schema.safeParse({ entity: 'media', entityId: 'media:scan', mediaType: 'scan' }).success, true);
+for (const forbidden of [
+  { entity: 'media', entityId: 'media:x', born: { date: 1930 } },
+  { entity: 'media', entityId: 'media:x', relations: [{ target: 'person:alex', kind: 'rival' }] },
+  { entity: 'evidence', entityId: 'evidence:x', participants: ['person:alex'] },
+  { entity: 'person', entityId: 'person:x', geo: { latitude: 0, longitude: 0 } },
+]) assert.equal(schema.safeParse(forbidden).success, false, 'entity-specific field must be rejected');
+assert.equal(schema.safeParse({ entity: 'media', entityId: 'media:bad', file: '' }).success, false);
+assert.equal(schema.safeParse({ entity: 'media', entityId: 'media:bad', file: '../escape.pdf' }).success, false);
+assert.equal(schema.safeParse({ entity: 'media', entityId: 'media:ok', file: './evidence.pdf' }).success, true);
+assert.throws(() => validateEntityCatalog([...records, entry('people/self-parent', 'person', 'person:self-parent', { kinship: { parents: ['person:self-parent'] } })]), /self kinship.parents/);
+assert.throws(() => validateEntityCatalog([...records, entry('people/self-partner', 'person', 'person:self-partner', { kinship: { partners: ['person:self-partner'] } })]), /self kinship.partners/);
+assert.throws(() => validateEntityCatalog([...records, entry('places/self', 'place', 'place:self', { parentPlace: 'place:self' })]), /self parentPlace/);
+assert.throws(() => validateEntityCatalog([
+  ...records,
+  entry('people/a', 'person', 'person:a', { kinship: { parents: ['person:b'] } }),
+  entry('people/b', 'person', 'person:b', { kinship: { parents: ['person:a'] } }),
+]), /person hierarchy cycle/);
+assert.throws(() => validateEntityCatalog([
+  ...records,
+  entry('places/a', 'place', 'place:a', { parentPlace: 'place:b' }),
+  entry('places/b', 'place', 'place:b', { parentPlace: 'place:a' }),
+]), /place hierarchy cycle/);
+assert.throws(() => validateEntityCatalog([
+  ...records,
+  entry('people/rival', 'person', 'person:rival', { relations: [{ target: 'media:video', kind: 'rival' }] }),
+]), /expected person reference/);
 console.log('Entity schema, canonical IDs, evidence/media and references: OK');

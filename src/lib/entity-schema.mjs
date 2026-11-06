@@ -57,7 +57,23 @@ const participant = z.union([
   z.object({ person: ref, role: z.string().optional() }),
 ]);
 
-// Pass Astro's image() helper from docsSchema to keep local file validation.
+// Local images are resolved by Astro image(); non-image files must be local
+// relative paths and are checked on disk by the build-data pipeline.
+const localDocument = z.string().regex(
+  /^\.\/(?!.*(?:\/\.\.?\/|\\\\))[a-z0-9_./-]+\.(?:pdf|txt|csv|json|mp3|ogg|wav|mp4|webm|mov|zip)$/i,
+  'Use an existing relative document/media file; external resources use externalUrl',
+);
+const SHARED = ['entity', 'entityId', 'sourceRefs', 'mediaRefs'];
+const BY_KIND = {
+  person: ['name', 'aliases', 'born', 'died', 'occupations', 'residences', 'relations', 'kinship'],
+  event: ['kind', 'date', 'endDate', 'participants', 'places', 'summary'],
+  place: ['historicalNames', 'geo', 'parentPlace', 'country'],
+  source: ['sourceType', 'sourceUrl', 'author', 'published', 'locator'],
+  evidence: ['claim', 'assessment'],
+  media: ['mediaType', 'file', 'externalUrl', 'alt', 'caption', 'subjects', 'eventRefs', 'placeRefs', 'credit', 'rights', 'license', 'recordedAt'],
+};
+const CUSTOM_FIELDS = new Set([...SHARED, ...Object.values(BY_KIND).flat()]);
+// Pass Astro's image() helper from docsSchema to keep image validation.
 export function entityFields(image) {
   return z.object({
     entity: z.enum(ENTITY_KINDS).optional(),
@@ -110,7 +126,7 @@ export function entityFields(image) {
     sourceRefs: referenceList.optional(),
     mediaRefs: referenceList.optional(),
     mediaType: z.enum(MEDIA_TYPES).optional(),
-    file: z.union([image(), z.string()]).optional(),
+    file: z.union([image(), localDocument]).optional(),
     externalUrl: z.string().url().optional(),
     alt: z.string().optional(),
     caption: z.string().optional(),
@@ -121,5 +137,17 @@ export function entityFields(image) {
     rights: z.string().optional(),
     license: z.string().optional(),
     recordedAt: date.optional(),
+  }).superRefine((data, ctx) => {
+    if (!data.entity) return; // ordinary editorial articles are unaffected
+    const allowed = new Set([...SHARED, ...BY_KIND[data.entity]]);
+    for (const key of CUSTOM_FIELDS) {
+      if (data[key] !== undefined && !allowed.has(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: key + ' is not allowed for entity ' + data.entity,
+        });
+      }
+    }
   });
 }
