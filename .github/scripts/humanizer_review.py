@@ -44,10 +44,13 @@ def language(path: str) -> str | None:
 
 def body_without_frontmatter(raw: str) -> str:
     lines = raw.lstrip("\ufeff").splitlines(keepends=True)
-    if not lines or lines[0].strip() != "---":
+    if not lines or lines[0].rstrip("\r\n").rstrip(" \t") != "---":
         return "".join(lines)
     for index in range(1, len(lines)):
-        if lines[index].strip() in {"---", "..."}:
+        # A frontmatter closing delimiter starts at column zero. Indented
+        # --- and ... can be literal content of a YAML block scalar.
+        delimiter = lines[index].rstrip("\r\n").rstrip(" \t")
+        if delimiter in {"---", "..."}:
             return "".join(lines[index + 1:])
     return ""  # Fail closed: never treat unterminated YAML as prose.
 
@@ -56,6 +59,16 @@ def hide(chars: list[str], start: int, end: int) -> None:
     for pos in range(start, min(len(chars), end)):
         if chars[pos] != "\n":
             chars[pos] = " "
+
+
+def is_markdown_escaped(text: str, pos: int) -> bool:
+    """A delimiter is escaped iff an odd number of backslashes precedes it."""
+    backslashes = 0
+    pos -= 1
+    while pos >= 0 and text[pos] == "\\":
+        backslashes += 1
+        pos -= 1
+    return backslashes % 2 == 1
 
 
 def end_brace(text: str, start: int) -> int:
@@ -293,7 +306,7 @@ def html_comment_scan_view(raw: str) -> str:
             close = raw.find(token, pos + run)
             if close >= 0:
                 end = close + run
-        elif raw[pos] == "{":
+        elif raw[pos] == "{" and not is_markdown_escaped(raw, pos):
             end = end_brace(raw, pos)
         elif raw[pos] == "<" and not raw.startswith("<!--", pos):
             match = re.match(r"</?([A-Za-z][\w.:-]*)(?=[\s/>])", raw[pos:])
@@ -319,7 +332,13 @@ def mask_html_comments_in_line(
     masked = list(line)
     pos = 0
     while pos < len(line):
-        start = pos if in_comment else line.find("<!--", pos)
+        if in_comment:
+            start = pos
+        else:
+            start = line.find("<!--", pos)
+            # An escaped opener is visible Markdown text, not an HTML comment.
+            while start >= 0 and is_markdown_escaped(line, start):
+                start = line.find("<!--", start + 4)
         if start < 0:
             break
         close = line.find("-->", start)
@@ -442,7 +461,7 @@ def prose_only(raw: str) -> str:
         if chars[pos] == " " and text[pos] != " ":
             pos += 1
             continue
-        if text.startswith("<!--", pos):
+        if text.startswith("<!--", pos) and not is_markdown_escaped(text, pos):
             end = text.find("-->", pos + 4)
             end = len(text) if end < 0 else end + 3
             hide(chars, pos, end)
@@ -468,7 +487,7 @@ def prose_only(raw: str) -> str:
                         end = len(text)
                 pos = end
                 continue
-        if text[pos] == "{":
+        if text[pos] == "{" and not is_markdown_escaped(text, pos):
             end = end_brace(text, pos)
             hide(chars, pos, end)
             pos = end
