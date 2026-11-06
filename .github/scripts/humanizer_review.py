@@ -1298,6 +1298,19 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         for hidden in ("/materials/page", "СЕКРЕТНОЕ TITLE", "<!--"):
             assert hidden not in extracted, ("multiline link metadata leaked", hidden, extracted)
 
+    # CommonMark link text can span soft line breaks. The label remains
+    # reader-visible but a relative target and title do not enter Humanizer.
+    soft_break_link = (
+        'См. [Нужный\nдокумент](/private/path "СЛУЖЕБНЫЙ TITLE") далее.\n'
+        "Следующий читательский абзац.\n"
+    )
+    soft_link_prose = prose_only(soft_break_link)
+    for fragment in ("См.", "Нужный", "документ", "далее", "Следующий читательский абзац"):
+        assert fragment in soft_link_prose, ("multiline label lost prose", fragment, soft_link_prose)
+    for hidden in ("/private/path", "СЛУЖЕБНЫЙ TITLE"):
+        assert hidden not in soft_link_prose, ("multiline label leaked metadata", hidden, soft_link_prose)
+    assert len(markdown_inline_links(soft_break_link)) == 1
+
     # An escaped Markdown literal \\( is not a TeX opener. It must not pair
     # with the closing delimiter of a later, real inline formula.
     quoted_tex = r"До \\( буквально. Важная проза после литерала. \(x+1\) Конец."
@@ -1596,6 +1609,26 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         r"Литерал перед выражением \{ и затем {handler('SECRET')} остаётся видимым."
     )
 
+    # JavaScript literals in MDX expressions/ESM are not raw HTML tags.
+    # Unclosed pseudo-tags must never consume the following article paragraph.
+    mdx_raw_literals = (
+        '{ "<table>" }\nВидимый абзац после выражения.\n',
+        'export const value = "<pre>";\nВидимый абзац после экспорта.\n',
+        'export const metadata = {\n'
+        '  title: "<table>",\n'
+        '};\n'
+        'Видимый абзац после объекта.\n',
+    )
+    for sample, visible in zip(
+        mdx_raw_literals,
+        ("Видимый абзац после выражения",
+         "Видимый абзац после экспорта",
+         "Видимый абзац после объекта")
+    ):
+        extracted = prose_only(sample)
+        assert visible in extracted, ("JS pseudo-tag ate prose", sample, extracted)
+        assert "<table>" not in extracted and "<pre>" not in extracted, extracted
+
     # The literal <!-- inside inline code, an MDX attribute or a JS expression
     # cannot open an HTML comment and consume following reader-visible text.
     fake_openers = (
@@ -1761,6 +1794,26 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         extracted = prose_only(source)
         assert visible in extracted, ("tag attribute swallowed prose", extracted)
         assert hidden not in extracted, ("tag attribute leaked raw data", extracted)
+
+    # CommonMark treats a four-space line as paragraph continuation when
+    # there is no intervening blank line; after a blank, it is indented code.
+    paragraph_continuations = (
+        "Начало абзаца\n"
+        "    ВАЖНОЕ ПРОДОЛЖЕНИЕ\n"
+        "    ВТОРОЕ ПРОДОЛЖЕНИЕ\n"
+        "Конец абзаца.\n"
+        "\n"
+        "    СЕКРЕТНЫЙ КОД ПОСЛЕ ПУСТОЙ СТРОКИ\n"
+        "\n"
+        "Обычная проза после кода.\n"
+    )
+    paragraph_prose = prose_only(paragraph_continuations)
+    for fragment in ("Начало абзаца", "ВАЖНОЕ ПРОДОЛЖЕНИЕ",
+                     "ВТОРОЕ ПРОДОЛЖЕНИЕ", "Конец абзаца",
+                     "Обычная проза после кода"):
+        assert fragment in paragraph_prose, ("paragraph continuation lost", fragment, paragraph_prose)
+    assert "СЕКРЕТНЫЙ КОД ПОСЛЕ ПУСТОЙ СТРОКИ" not in paragraph_prose, paragraph_prose
+    assert len(ordinary_paragraph_continuations(paragraph_continuations)) == 2
 
     # Multi-line list-indented code remains code until it dedents, including
     # after intervening blank lines and with Markdown-like syntax inside code.
