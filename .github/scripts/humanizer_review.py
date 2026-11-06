@@ -779,6 +779,9 @@ def mask_fenced_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None
         fence_text, quote_depth = _fence_line(line, list_indents)
         fence = FENCE.match(fence_text)
         math_text = fence_text.lstrip()
+        math_list = re.match(r"^(?:[-*+]|\d+[.)])\s+", math_text)
+        if math_list:
+            math_text = math_text[math_list.end():]
         # A quote boundary ends an unfinished quoted code/math block.
         if in_fence and quote_depth < in_fence[2]:
             in_fence = None
