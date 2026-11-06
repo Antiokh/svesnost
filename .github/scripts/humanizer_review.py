@@ -411,32 +411,35 @@ def mask_inline_paren_math(chars: list[str]) -> None:
 
 def find_matching_raw_close(text: str, opening_end: int, tag: str) -> int | None:
     """Find the corresponding closing tag, respecting nested same-name tags."""
-    pattern = re.compile(r"</?" + re.escape(tag) + r"(?=[\s/>])", re.I)
+    tag_pattern = re.compile(r"</?([A-Za-z][\w.:-]*)(?=[\s/>])")
     depth = 1
     pos = opening_end
-    while True:
-        match = pattern.search(text, pos)
-        comment_start = text.find("<!--", pos)
-        # HTML-comment contents are never tags. Skip even a matching
-        # </table> that appears before the real outer closing tag.
-        if comment_start >= 0 and (match is None or comment_start < match.start()):
-            comment_end = text.find("-->", comment_start + 4)
+    while pos < len(text):
+        start = text.find("<", pos)
+        if start < 0:
+            return None
+        if text.startswith("<!--", start):
+            comment_end = text.find("-->", start + 4)
             if comment_end < 0:
                 return None
             pos = comment_end + 3
             continue
-        if match is None:
-            return None
-        start = match.start()
+        match = tag_pattern.match(text, start)
+        if not match:
+            pos = start + 1
+            continue
+        # Consume a complete element tag before matching names, so
+        # </table> and <!-- inside quoted attributes cannot act as tokens.
         end = end_tag(text, start)
         if end <= start or end == len(text) and ">" not in text[start:end]:
             return None
-        if text.startswith("</", start):
-            depth -= 1
-            if depth == 0:
-                return end
-        elif not text[start:end].rstrip().endswith("/>"):
-            depth += 1
+        if match.group(1).casefold() == tag.casefold():
+            if text.startswith("</", start):
+                depth -= 1
+                if depth == 0:
+                    return end
+            elif not text[start:end].rstrip().endswith("/>"):
+                depth += 1
         pos = end
     return None
 
