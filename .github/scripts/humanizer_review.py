@@ -1647,6 +1647,18 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
                         "СЕКРЕТ_ИМПОРТА", "module.js"):
         assert hidden_text not in modules_body, ("ESM leaked into prose", hidden_text, modules_body)
 
+    # ESM 'from' is allowed on its own line after a balanced import/export.
+    # The next reader-visible Markdown paragraph must not be consumed.
+    for statement in (
+        "import Widget\nfrom './Widget.jsx'\n",
+        "export { Widget }\nfrom './Widget.jsx'\n",
+    ):
+        snippet = statement + "\nВидимая проза после импорта.\n"
+        extracted = prose_only(snippet)
+        assert "Видимая проза после импорта." in extracted, extracted
+        for metadata in ("Widget", "from", ".jsx", "export", "import"):
+            assert metadata not in extracted, ("split ESM leaked", metadata, extracted)
+
     # An incomplete import in standalone/list-indented Markdown code cannot
     # start module state and consume the paragraph after that code block.
     for indented_source, visible_after in (
@@ -1968,6 +1980,7 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     reference = (
         "Читайте [проверенную публикацию][source] и [документ][].\n"
         "Не показывать ![изображение][cover].\n"
+        "\n"
         "[source]: https://example.org/secret\n"
         "[cover]: https://example.org/image.png\n"
     )
@@ -1980,7 +1993,9 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     shortcut = (
         "Видимый текст до.\n"
         "![СЕКРЕТНЫЙ ALT]\n"
+        "\n"
         "[СЕКРЕТНЫЙ ALT]: /img.png\n"
+        "\n"
         "![НЕОПРЕДЕЛЁННЫЙ ЛИТЕРАЛ]\n"
         "Видимый текст после.\n"
     )
@@ -2015,6 +2030,43 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "Текст со" in compact_body and "ссылкой" in compact_body, compact_body
     assert "/private/internal-path" not in compact_body, compact_body
     assert "[ref]:" not in compact_body, compact_body
+
+    # A reference definition cannot interrupt a paragraph (CommonMark
+    # example 213); the entire second line remains reader-visible.
+    visible_definition = (
+        "Видимая читателю строка\n"
+        "[ref]: /page\n"
+        "\n"
+        "Следующий абзац.\n"
+    )
+    visible_definition_prose = prose_only(visible_definition)
+    for phrase in ("Видимая читателю строка", "[ref]: /page", "Следующий абзац"):
+        assert phrase in visible_definition_prose, ("paragraph reference lost", phrase, visible_definition_prose)
+
+    # CommonMark also permits a destination on the next line and a title
+    # spanning multiple subsequent lines, including in blockquotes.
+    multiline_reference = (
+        "[ref]:\n"
+        "/private/path\n"
+        "\n"
+        "[other]: /page '\n"
+        "ТЕХНИЧЕСКИЙ TITLE\n"
+        "ещё строка\n"
+        "'\n"
+        "\n"
+        "> [third]:\n"
+        "> /private/quoted\n"
+        "\n"
+        "См. [ссылку][ref] и [источник][other].\n"
+    )
+    multiline_reference_prose = prose_only(multiline_reference)
+    for visible in ("См.", "ссылку", "источник"):
+        assert visible in multiline_reference_prose, ("multiline ref lost prose", visible, multiline_reference_prose)
+    for secret in ("[ref]:", "/private/path", "ТЕХНИЧЕСКИЙ TITLE",
+                   "ещё строка", "/private/quoted", "[third]:"):
+        assert secret not in multiline_reference_prose, (
+            "multiline ref leaked", secret, multiline_reference_prose
+        )
 
     # Entire GFM table blocks are structural data, with or without border pipes.
     table = """Текст до таблицы.
@@ -2193,6 +2245,46 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     for hidden in ("КОД_1", "КОД_2", "КОД_3", "~~~"):
         assert hidden not in list_code_result, (hidden, list_code_result)
 
+    # Indentation in a JSX/MDX Markdown container is formatting, not
+    # automatically an indented code block. Keep reader-visible text at
+    # 0/2/4/6 spaces, including nested and multi-paragraph component bodies.
+    for padding in (0, 2, 4, 6):
+        nested_mdx = (
+            "<Accordion>\n"
+            '  <AccordionItem title="СЛУЖЕБНЫЙ ПРОП">\n'
+            + " " * padding + "Видимая статья в аккордеоне.\n"
+            + "\n"
+            + " " * padding + "Второй видимый абзац.\n"
+            + "  </AccordionItem>\n"
+            + "</Accordion>\n"
+            + "\n"
+            + "<Aside>\n"
+            + " " * padding + "Видимое пояснение Aside.\n"
+            + "</Aside>\n"
+            + "<Steps>\n"
+            + " " * padding + "1. Видимое содержание шага.\n"
+            + "</Steps>\n"
+            + "\n"
+            + "Внешняя проза после компонента.\n"
+        )
+        result_mdx = prose_only(nested_mdx)
+        for visible in ("Видимая статья в аккордеоне", "Второй видимый абзац",
+                        "Видимое пояснение Aside", "Видимое содержание шага",
+                        "Внешняя проза после компонента"):
+            assert visible in result_mdx, ("MDX lost reader text", padding, visible, result_mdx)
+        assert "СЛУЖЕБНЫЙ ПРОП" not in result_mdx, result_mdx
+    real_mdx_code = (
+        "<Aside>\n"
+        "\n"
+        "        СЛУЖЕБНЫЙ КОД В ASIDE\n"
+        "\n"
+        "    Видимый текст после кода.\n"
+        "</Aside>\n"
+    )
+    code_prose = prose_only(real_mdx_code)
+    assert "СЛУЖЕБНЫЙ КОД В ASIDE" not in code_prose, code_prose
+    assert "Видимый текст после кода" in code_prose, code_prose
+
     # Indented nested list items are prose, but standalone indented blocks are code.
     nested = """- Основной пункт списка
     - Вложенный пункт списка
@@ -2267,6 +2359,57 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         assert MARKER in summary, summary
         assert new_path not in summary, ("pure rename reported as new", summary)
         assert "Новых замечаний нет" not in summary, summary
+
+    # Exercise the full report path for both languages with nested,
+    # multi-paragraph MDX content. Stubs keep the test deterministic and
+    # require prose to reach both reviewer APIs before a report is generated.
+    with TemporaryDirectory() as folder:
+        root = Path(folder)
+        base_dir = root / "base"
+        head_dir = root / "head"
+        ru_dir = root / "ru"
+        sr_dir = root / "sr"
+        for path in (ru_dir / "scripts", sr_dir / "scripts"):
+            path.mkdir(parents=True, exist_ok=True)
+        (ru_dir / "scripts/review.py").write_text(
+            "def run_review(text, **kwargs):\n"
+            "    assert 'видимый' in text.lower(), text\n"
+            "    assert 'СЛУЖЕБНЫЙ' not in text, text\n"
+            "    return {'findings': []}\n",
+            encoding="utf-8",
+        )
+        (sr_dir / "scripts/check.py").write_text(
+            "def review(text):\n"
+            "    assert 'видљив' in text.lower(), text\n"
+            "    assert 'СЛУЖБЕНИ' not in text, text\n"
+            "    return []\n",
+            encoding="utf-8",
+        )
+        pair = (
+            (DOCS + "ru/mdx-review.mdx", "видимый текст для русского редактора", "СЛУЖЕБНЫЙ"),
+            (DOCS + "mdx-review.mdx", "видљив текст за српског уредника", "СЛУЖБЕНИ"),
+        )
+        changed = []
+        for path, (label, sentence, metadata) in zip(pair, pair):
+            document, phrase, secret = label, sentence, metadata
+            target = head_dir / document
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(
+                '<Accordion><AccordionItem title="' + secret + '">\n'
+                '    ' + phrase + '.\n'
+                '\n'
+                '      ' + phrase + ' у другом пасусу.\n'
+                '</AccordionItem></Accordion>\n'
+                '<Steps>\n'
+                '    1. ' + phrase + ' у кораку.\n'
+                '</Steps>\n',
+                encoding="utf-8",
+            )
+            changed.append(document)
+        summary = report(changed, base_dir, head_dir, ru_dir, sr_dir)
+        assert "humanizer_russian" in summary and "humanizer_serbian" in summary, summary
+        for path in changed:
+            assert path in summary, ("report skipped nested MDX", path, summary)
 
     # Serbian findings are subtracted by evidence multiset, not by total rule count.
     from types import SimpleNamespace
