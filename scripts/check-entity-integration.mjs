@@ -157,9 +157,9 @@ try {
   assert.equal(geojson.features[0].properties.eventUrl,'/events/fixture-conference/');
   assert.match(read('/events/map/'),/Измишљена конференција/);
   const media = read('/media/fixture-note/');
-  assert.match(media,/youtube-nocookie\\.com\\/embed\\/AAAAAAAAAAA/);
-  assert.match(media,/youtube\\.com\\/watch\\?v=AAAAAAAAAAA/);
-  assert.match(media,/https:\/\/example\\.org\\/document\\.pdf/);
+  assert.ok(media.includes('youtube-nocookie.com/embed/AAAAAAAAAAA'));
+  assert.ok(media.includes('youtube.com/watch?v=AAAAAAAAAAA'));
+  assert.ok(media.includes('https://example.org/document.pdf'));
   console.log('Synthetic entity pages, auto sections, backlinks and global map: OK');
 } finally {
   for(const [relative] of docs) {
