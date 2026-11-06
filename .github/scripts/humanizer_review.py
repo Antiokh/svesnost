@@ -681,6 +681,43 @@ def mask_fenced_blocks(text: str, chars: list[str]) -> None:
         offset += len(line)
 
 
+def mdx_container_prose_lines(text: str) -> set[int]:
+    """Find reader-facing Markdown indented inside non-raw JSX containers.
+
+    MDX components like Aside, Steps and Accordion nest Markdown children.
+    Their formatting indentation is not an independent four-space code
+    block. Preserve ordinary prose and list items up to six (or more
+    relative) spaces, but leave substantially deeper indented code to the
+    Markdown code scanner after a block boundary.
+    """
+    view_chars = list(text)
+    mask_fenced_blocks(text, view_chars)
+    view = "".join(view_chars)
+    result: set[int] = set()
+    containers: list[tuple[str, int]] = []
+    offset = 0
+    for line in view.splitlines(keepends=True):
+        visible = line.rstrip("\r\n")
+        indent = len(visible) - len(visible.lstrip(" "))
+        match = re.match(r"^[ \t]*<(/?)([A-Z][\w.:-]*)(?=[\s/>])", visible)
+        if match and match.group(2).lower() not in RAW_ELEMENTS:
+            tag = match.group(2)
+            if match.group(1):
+                for index in range(len(containers) - 1, -1, -1):
+                    if containers[index][0] == tag:
+                        containers = containers[:index]
+                        break
+            elif containers or indent <= 3:
+                end = end_tag(visible, match.start() + len(match.group(0)) - len(tag) - 1)
+                if not visible[:end].rstrip().endswith("/>"):
+                    containers.append((tag, indent))
+        elif (containers and visible.strip() and indent >= 4
+              and indent < containers[-1][1] + 8):
+            result.add(offset)
+        offset += len(line)
+    return result
+
+
 def ordinary_paragraph_continuations(text: str) -> set[int]:
     """Offsets of indented lines continuing a paragraph without a blank line.
 
@@ -715,7 +752,8 @@ def ordinary_paragraph_continuations(text: str) -> set[int]:
 
 
 def mask_indented_code_before_blocks(text: str, chars: list[str],
-                                     paragraph_lines: set[int]) -> None:
+                                     paragraph_lines: set[int],
+                                     mdx_prose_lines: set[int]) -> None:
     """Hide indented code before detecting ESM declarations or HTML raw tags.
 
     Preserve nested list prose and multiline footnote continuations. Code
@@ -753,7 +791,7 @@ def mask_indented_code_before_blocks(text: str, chars: list[str],
         elif in_footnote and 4 <= indent < 8:
             after_blank = False
         elif marker:
-            if indent >= 4 and not list_indents:
+            if indent >= 4 and not list_indents and offset not in mdx_prose_lines:
                 hide(chars, offset, offset + len(line))
             else:
                 while list_indents and list_indents[-1][0] >= indent:
@@ -765,7 +803,7 @@ def mask_indented_code_before_blocks(text: str, chars: list[str],
             after_blank = False
         elif indent >= 4:
             if not list_indents:
-                if offset not in paragraph_lines:
+                if offset not in paragraph_lines and offset not in mdx_prose_lines:
                     hide(chars, offset, offset + len(line))
             elif after_blank and indent >= list_indents[-1][1] + 4:
                 list_code_indent = list_indents[-1][1] + 4
@@ -974,7 +1012,8 @@ def prose_only(raw: str) -> str:
     # Otherwise an indented "<pre>" or incomplete "import {" can swallow
     # the next reader-visible paragraph. Fenced code is masked before ESM.
     paragraph_lines = ordinary_paragraph_continuations(text)
-    mask_indented_code_before_blocks(text, chars, paragraph_lines)
+    mdx_prose_lines = mdx_container_prose_lines(text)
+    mask_indented_code_before_blocks(text, chars, paragraph_lines, mdx_prose_lines)
     mask_raw_elements_before_blocks(text, chars)
     mask_fenced_blocks(text, chars)
     mask_mdx_esm(text, chars)
@@ -1033,7 +1072,7 @@ def prose_only(raw: str) -> str:
                 # not to an independent indented code block.
                 after_blank = False
             elif list_marker:
-                if indent >= 4 and not list_indents:
+                if indent >= 4 and not list_indents and offset not in mdx_prose_lines:
                     hide(chars, offset, offset + len(line))
                 else:
                     while list_indents and list_indents[-1][0] >= indent:
@@ -1045,7 +1084,7 @@ def prose_only(raw: str) -> str:
                 after_blank = False
             elif indent >= 4:
                 if not list_indents:
-                    if offset not in paragraph_lines:
+                    if offset not in paragraph_lines and offset not in mdx_prose_lines:
                         hide(chars, offset, offset + len(line))
                 elif after_blank and indent >= list_indents[-1][1] + 4:
                     list_code_indent = list_indents[-1][1] + 4
