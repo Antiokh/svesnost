@@ -51,6 +51,7 @@ const relation = z.object({
   assessment: z.enum(ASSESSMENTS).optional(),
   sourceRefs: referenceList.optional(),
   note: z.string().optional(),
+  evidenceRefs: referenceList.optional(),
 });
 const participant = z.union([
   ref,
@@ -63,13 +64,13 @@ const localDocument = z.string().regex(
   /^\.\/(?!.*(?:\/\.\.?\/|\\\\))[a-z0-9_./-]+\.(?:pdf|txt|csv|json|mp3|ogg|wav|mp4|webm|mov|zip)$/i,
   'Use an existing relative document/media file; external resources use externalUrl',
 );
-const SHARED = ['entity', 'entityId', 'sourceRefs', 'mediaRefs'];
+const SHARED = ['entity', 'entityId', 'sourceRefs', 'mediaRefs', 'evidenceRefs'];
 const BY_KIND = {
   person: ['name', 'aliases', 'born', 'died', 'occupations', 'residences', 'relations', 'kinship'],
   event: ['kind', 'date', 'endDate', 'participants', 'places', 'summary'],
   place: ['historicalNames', 'geo', 'parentPlace', 'country'],
   source: ['sourceType', 'sourceUrl', 'author', 'published', 'locator'],
-  evidence: ['claim', 'assessment'],
+  evidence: ['claim', 'assessment', 'subjectRefs'],
   media: ['mediaType', 'file', 'externalUrl', 'alt', 'caption', 'subjects', 'eventRefs', 'placeRefs', 'credit', 'rights', 'license', 'recordedAt'],
 };
 const CUSTOM_FIELDS = new Set([...SHARED, ...Object.values(BY_KIND).flat()]);
@@ -125,6 +126,8 @@ export function entityFields(image) {
     assessment: z.enum(ASSESSMENTS).optional(),
     sourceRefs: referenceList.optional(),
     mediaRefs: referenceList.optional(),
+    evidenceRefs: referenceList.optional(),
+    subjectRefs: referenceList.optional(),
     mediaType: z.enum(MEDIA_TYPES).optional(),
     file: z.union([image(), localDocument]).optional(),
     externalUrl: z.string().url().optional(),

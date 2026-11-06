@@ -65,6 +65,11 @@ export function validateEntityCatalog(entries) {
   for (const { id, data } of records) {
     checkMany(id, data.sourceRefs, 'source');
     checkMany(id, data.mediaRefs, 'media');
+    checkMany(id, data.evidenceRefs, 'evidence');
+    for (const ref of data.subjectRefs ?? []) {
+      check(id, ref);
+      if (!/^(person|event|place):/.test(ref)) errors.push(`${id}: evidence subject must be person, event or place, got ${ref}`);
+    }
     checkMany(id, data.places, 'place');
     checkMany(id, data.eventRefs, 'event');
     checkMany(id, data.placeRefs, 'place');
@@ -98,6 +103,7 @@ export function validateEntityCatalog(entries) {
     for (const relation of data.relations ?? []) {
       check(id, relation.target, 'person');
       checkMany(id, relation.sourceRefs, 'source');
+      checkMany(id, relation.evidenceRefs, 'evidence');
       if (relation.target === data.entityId) errors.push(`${id}: self-relation is not allowed`);
     }
   }

@@ -3,7 +3,7 @@ import { z } from 'astro/zod';
 import { entityFields, ENTITY_KINDS, SOURCE_TYPES, MEDIA_TYPES } from '../src/lib/entity-schema.mjs';
 import { validateEntityCatalog } from '../src/lib/entity-catalog.mjs';
 
-const schema = entityFields(() => z.string());
+const schema = entityFields(() => z.object({ src: z.string(), width: z.number(), height: z.number() }));
 const entry = (id, entity, entityId, data = {}) => ({ id, data: { entity, entityId, ...data } });
 assert.deepEqual(ENTITY_KINDS, ['person', 'event', 'place', 'source', 'evidence', 'media']);
 assert.ok(SOURCE_TYPES.includes('rumor'));
