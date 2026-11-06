@@ -2,11 +2,8 @@ name: Језичка редактура / Языковая редактура
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-    paths:
-      - 'src/content/docs/**/*.md'
-      - 'src/content/docs/**/*.mdx'
-      - '!src/content/docs/en/**'
+    # Always refresh reports, even when the latest diff has no ru/sr articles.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
 
 # Serialize publication per PR: a newer synchronize supersedes the old run.
 concurrency:
@@ -30,7 +27,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: base
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
       - name: Proposed content from PR
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -49,6 +46,17 @@ jobs:
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "First integration PR is tested by the separate read-only contract workflow." >> "$GITHUB_STEP_SUMMARY"
           fi
+      - name: Fetch merge-base article snapshot
+        if: steps.trusted.outputs.ready == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Adapter stays on trusted base; comparison uses the PR merge base.
+          git -C base fetch --no-tags origin \
+            "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/humanizer-pr-head"
+          MERGE_BASE="$(git -C base merge-base HEAD refs/remotes/origin/humanizer-pr-head)"
+          test -n "$MERGE_BASE"
+          git -C base worktree add --detach "$GITHUB_WORKSPACE/base-content" "$MERGE_BASE"
       - name: Select changed article files
         if: steps.trusted.outputs.ready == 'true'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
@@ -93,7 +101,7 @@ jobs:
         run: |
           python3 base/.github/scripts/humanizer_review.py \
             --files /tmp/humanizer-files.txt \
-            --base-root base \
+            --base-root base-content \
             --head-root head \
             --russian-root /tmp/humanizer_russian \
             --serbian-root /tmp/humanizer_serbian \
@@ -141,6 +149,20 @@ jobs:
               per_page: 100,
             });
             const existing = findOwnedReviewComment(comments, marker);
+            // Re-read the head after pagination, immediately before writing.
+            // Comments have no atomic compare-and-swap against a PR HEAD.
+            const beforeWrite = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (!isCurrentReviewHead(
+              context.payload.pull_request.head.sha,
+              beforeWrite.data.head.sha
+            )) {
+              core.info('Skip stale review after comments pagination.');
+              return;
+            }
             if (existing) {
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
