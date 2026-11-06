@@ -1,0 +1,179 @@
+import { test, expect } from '@playwright/test';
+
+test('mobile splash exposes language and theme controls in all editions', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile');
+  for (const url of ['/', '/ru/', '/en/']) {
+    await page.goto(url);
+    const toolbar = page.locator('[data-sves-mobile-toolbar]');
+    await expect(toolbar).toBeVisible();
+    await expect(toolbar.locator('details[data-sves-language-mobile]')).toHaveCount(1);
+    await expect(toolbar.locator('select[data-sves-theme-mobile]')).toHaveCount(1);
+  }
+  // Narrow devices must not push the controls off-screen.
+  await page.setViewportSize({ width: 320, height: 700 });
+  await page.goto('/');
+  const box = await page.locator('[data-sves-mobile-toolbar]').boundingBox();
+  expect(box).not.toBeNull();
+  expect(box.x + box.width).toBeLessThanOrEqual(321);
+});
+
+test('mobile language switching and theme survive navigation and reload', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile');
+  await page.goto('/');
+  const languages = page.locator('[data-sves-mobile-toolbar] details[data-sves-language-mobile]');
+  await languages.locator('summary').click();
+  await languages.locator('a[href="/ru/"]').click();
+  await expect(page).toHaveURL(/\/ru\/$/);
+  await page.locator('[data-sves-mobile-toolbar] select[data-sves-theme-mobile]').selectOption('light');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.locator('[data-sves-mobile-toolbar] select[data-sves-theme-mobile]').selectOption('auto');
+  await expect(page.locator('[data-sves-mobile-toolbar] select[data-sves-theme-mobile]')).toHaveValue('auto');
+});
+
+test('mobile popover retains Escape and contains compact preferences', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile');
+  await page.goto('/editorial-policy/');
+  await page.locator('button[popovertarget="starlight__sidebar"]').click();
+  const popover = page.locator('#starlight__sidebar');
+  await expect.poll(() => popover.evaluate((node) => node.matches(':popover-open'))).toBe(true);
+  await expect(popover.locator('.language-mobile')).toBeVisible();
+  await expect(popover.locator('.theme-mobile')).toBeVisible();
+  const mainFrame = page.locator('.main-frame');
+  const skipLink = page.locator('.sl-skip-link');
+  await expect(mainFrame).toHaveAttribute('inert', '');
+  await expect(skipLink).toHaveAttribute('inert', '');
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => {
+    const active = document.activeElement;
+    return Boolean(active?.closest('header, #starlight__sidebar'));
+  })).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect.poll(() => popover.evaluate((node) => node.matches(':popover-open'))).toBe(false);
+  await expect(mainFrame).not.toHaveAttribute('inert', '');
+  await expect(skipLink).not.toHaveAttribute('inert', '');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect.poll(() => popover.evaluate((node) => getComputedStyle(node).transitionDuration)).toBe('0s');
+});
+
+test('desktop three-position theme switch works with keyboard', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/en/');
+  const theme = page.locator('.right-group [data-sves-theme-slider]');
+  await expect(theme).toBeVisible();
+  await theme.focus();
+  await theme.press('End');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(theme).toHaveAttribute('aria-valuenow', '2');
+  await theme.press('ArrowDown');
+  await expect(theme).toHaveAttribute('aria-valuenow', '1');
+  await expect(theme).toHaveAttribute('data-theme-mode', 'auto');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await theme.press('ArrowDown');
+  await expect(theme).toHaveAttribute('aria-valuenow', '0');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await theme.press('ArrowUp');
+  await expect(theme).toHaveAttribute('aria-valuenow', '1');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await theme.press('ArrowUp');
+  await expect(theme).toHaveAttribute('aria-valuenow', '2');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await theme.press('Home');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  // Synthetic keyboard clicks must not jump to the first slider position.
+  await theme.press('Space');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+});
+
+test('desktop sidebar and ToC can be hidden independently and restored', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'desktop');
+  await page.goto('/editorial-policy/');
+  const sidebar = page.locator('button.panel-toggle[data-panel-toggle="sidebar"]');
+  const toc = page.locator('button.panel-toggle[data-panel-toggle="toc"]');
+  await expect(sidebar).toBeVisible();
+  await expect(toc).toBeVisible();
+  // A changing action label must not expose the ARIA toggle-button pressed state.
+  await expect(sidebar).toHaveAttribute('aria-label', 'Сакриј бочни мени');
+  await expect(toc).toHaveAttribute('aria-label', 'Сакриј садржај');
+  await expect(sidebar).not.toHaveAttribute('aria-pressed', /.+/);
+  await expect(toc).not.toHaveAttribute('aria-pressed', /.+/);
+  const pane = page.locator('.main-pane');
+  const initialWidth = await pane.evaluate((element) => element.getBoundingClientRect().width);
+  await sidebar.click();
+  await expect(page.locator('html')).toHaveClass(/sves-hide-sidebar/);
+  await expect(sidebar).toHaveAttribute('aria-label', 'Прикажи бочни мени');
+  await expect(sidebar).toHaveAttribute('data-panel-hidden', 'true');
+  await expect(sidebar).not.toHaveAttribute('aria-pressed', /.+/);
+  await expect.poll(() => pane.evaluate((element) => element.getBoundingClientRect().width))
+    .toBeGreaterThan(initialWidth + 20);
+  await page.reload();
+  await expect(page.locator('html')).toHaveClass(/sves-hide-sidebar/);
+  const sidebarHiddenWidth = await pane.evaluate((element) => element.getBoundingClientRect().width);
+  await toc.click();
+  await expect(page.locator('html')).toHaveClass(/sves-hide-toc/);
+  await expect(toc).toHaveAttribute('aria-label', 'Прикажи садржај');
+  await expect(toc).not.toHaveAttribute('aria-pressed', /.+/);
+  await expect(page.locator('.right-sidebar-container')).toBeHidden();
+  await expect.poll(() => pane.evaluate((element) => element.getBoundingClientRect().width))
+    .toBeGreaterThan(sidebarHiddenWidth + 20);
+  await page.reload();
+  await expect(page.locator('html')).toHaveClass(/sves-hide-toc/);
+  const restore = page.locator('button.toc-restore');
+  await expect(restore).toBeVisible();
+  await expect(restore).toHaveAttribute('aria-label', 'Прикажи садржај');
+  await expect(restore).not.toHaveAttribute('aria-pressed', /.+/);
+  await restore.click();
+  await expect(page.locator('html')).not.toHaveClass(/sves-hide-toc/);
+  await expect(toc).toHaveAttribute('aria-label', 'Сакриј садржај');
+  await expect(page.locator('html')).toHaveClass(/sves-hide-sidebar/);
+});
+
+test('system appearance follows OS changes only in auto mode', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.goto('/ru/');
+  const select = page.locator('[data-sves-mobile-toolbar] select[data-sves-theme-mobile]');
+  await select.selectOption('auto');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await select.selectOption('dark');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+});
+
+// The primary language navigation must remain functional when client scripts fail.
+test.describe('language navigation without JavaScript', () => {
+  test.use({ javaScriptEnabled: false });
+
+  test('mobile splash and article menus navigate by real links', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile');
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.goto('/');
+    const splash = page.locator('[data-sves-mobile-toolbar] details[data-sves-language-mobile]');
+    await expect(splash.locator('summary')).toBeVisible();
+    await splash.locator('summary').click();
+    await expect(splash).toHaveAttribute('open', '');
+    await expect(splash.locator('a[href="/ru/"]')).toBeVisible();
+    await splash.locator('a[href="/ru/"]').click();
+    await expect(page).toHaveURL(/\/ru\/$/);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
+
+    // A Serbian-only article must link to the target language home.
+    await page.goto('/materials/izvori/');
+    await page.locator('button[popovertarget="starlight__sidebar"]').click();
+    const sidebar = page.locator('#starlight__sidebar');
+    await expect.poll(() => sidebar.evaluate((node) => node.matches(':popover-open'))).toBe(true);
+    const selector = sidebar.locator('details[data-sves-language-mobile]');
+    await selector.locator('summary').click();
+    await expect(selector.locator('a[href="/en/"]')).toBeVisible();
+    await selector.locator('a[href="/en/"]').click();
+    await expect(page).toHaveURL(/\/en\/$/);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  });
+});

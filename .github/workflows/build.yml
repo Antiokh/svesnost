@@ -18,8 +18,10 @@ jobs:
         with:
           node-version: '24'
       - name: Install dependencies
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Build static site
         run: npm run build
       - name: Check language isolation
         run: npm run test:i18n
+      - name: Browser checks (mobile and desktop)
+        run: npm run test:ui
