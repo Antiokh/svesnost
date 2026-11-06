@@ -370,6 +370,51 @@ def mask_inline_link_targets(text: str, chars: list[str]) -> None:
             hide(chars, label_end, end)
 
 
+def normalize_reference_label(label: str) -> str:
+    return re.sub(r"\s+", " ", label).strip().casefold()
+
+
+def mask_reference_definitions(text: str, chars: list[str]) -> set[str]:
+    """Hide reference targets and title continuations, including in quotes.
+
+    Only definitions outside already-masked code/raw blocks are collected.
+    Return identifiers for recognizing shortcut-reference images.
+    """
+    labels: set[str] = set()
+    lines = "".join(chars).splitlines(keepends=True)
+    offsets: list[int] = []
+    offset = 0
+    for line in lines:
+        offsets.append(offset)
+        offset += len(line)
+    for index, line in enumerate(lines):
+        visible, quote_depth = _unquote_line(line)
+        match = re.match(r"^ {0,3}\[([^\]\n]+)\]:[ \t]+(\S.*)$",
+                         visible.rstrip("\r\n"))
+        if not match or match.group(1).startswith("^"):
+            continue
+        labels.add(normalize_reference_label(match.group(1)))
+        hide(chars, offsets[index], offsets[index] + len(line))
+        if index + 1 < len(lines):
+            next_visible, next_depth = _unquote_line(lines[index + 1])
+            if next_depth == quote_depth and re.fullmatch(
+                r"^[ \t]{1,3}(?:\"[^\"\n]*\"|'[^'\n]*'|\([^)\n]*\))[ \t]*",
+                next_visible.rstrip("\r\n")
+            ):
+                hide(chars, offsets[index + 1], offsets[index + 1] + len(lines[index + 1]))
+    return labels
+
+
+def mask_shortcut_reference_images(chars: list[str], labels: set[str]) -> None:
+    """Only resolved ![alt] shortcuts are images; unknown labels stay text."""
+    if not labels:
+        return
+    source = "".join(chars)
+    for match in re.finditer(r"!\[([^\]\n]+)\](?!\(|\[)", source):
+        if normalize_reference_label(match.group(1)) in labels:
+            hide(chars, *match.span())
+
+
 def mask_bare_urls(chars: list[str]) -> None:
     """Mask bare URLs through balanced parentheses without swallowing prose."""
     text = "".join(chars)
@@ -736,6 +781,7 @@ def prose_only(raw: str) -> str:
     mask_raw_elements_before_blocks(text, chars)
     mask_fenced_blocks(text, chars)
     mask_mdx_esm(text, chars)
+    reference_labels = mask_reference_definitions(text, chars)
     block_text = "".join(chars)
     offset = 0
     in_fence = None
@@ -904,7 +950,9 @@ def prose_only(raw: str) -> str:
         pos += 1
 
     # Inline links/images were masked using balanced syntax before MDX parsing.
-    # Reference-style links are processed here; footnote prose stays.
+    # Reference-style links and resolved shortcut-reference images are masked
+    # here; unknown ![literal] labels are left as reader-visible text.
+    mask_shortcut_reference_images(chars, reference_labels)
     cleaned = "".join(chars)
     # Markdown reference links preserve their visible label, not [reference-id].
     # Images are not body prose, including reference-style image labels.
