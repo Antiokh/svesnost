@@ -2070,12 +2070,20 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         "\n"
         "[source]: https://example.org/secret\n"
         "[cover]: https://example.org/image.png\n"
+        "[документ]: /document.pdf\n"
     )
     reference_body = prose_only(reference)
     assert "проверенную публикацию" in reference_body, reference_body
     assert "документ" in reference_body, reference_body
     for hidden in ("[source]", "[cover]", "изображение", "example.org", "[]"):
         assert hidden not in reference_body, (hidden, reference_body)
+    # A full reference link or image without a matching definition is
+    # ordinary visible text, including its unresolved identifier.
+    unresolved_ref = "Вот ![Видимые слова][missing] и [другие слова][missing]."
+    unresolved_prose = prose_only(unresolved_ref)
+    for expected in ("Видимые слова", "другие слова", "[missing]"):
+        assert expected in unresolved_prose, (expected, unresolved_prose)
+
     # Shortcut image references are images only when their label resolves.
     shortcut = (
         "Видимый текст до.\n"
@@ -2385,6 +2393,18 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     for value in ("Основной пункт", "Вложенный пункт", "Продолжение вложенного пункта", "После списка"):
         assert value in nested_result, ("nested list lost", value, nested_result)
     assert "СКРЫТЫЙ КОД" not in nested_result
+
+    # Currency remains visible, but spaced numeric expressions are math.
+    assert "2 + 2 = 4" not in prose_only("Формула $2 + 2 = 4$ описана словами.")
+    assert "$5" in prose_only("Цена $5 за набор.")
+    # Nested quote headings should contain their visible text but no markup.
+    heading = prose_only("> > ## Видимый заголовок\n> # Још један наслов.\n")
+    assert "Видимый заголовок" in heading and "Још један наслов" in heading, heading
+    assert "#" not in heading and ">" not in heading, heading
+    # Markdown braces are not JavaScript; MDX braces remain expressions.
+    markdown_braces = "Буквально {важное пояснение} и следующий абзац."
+    assert "важное пояснение" in prose_only(markdown_braces, is_mdx=False)
+    assert "важное пояснение" not in prose_only(markdown_braces, is_mdx=True)
 
     # Inline TeX is markup; an escaped dollar or an unpaired currency sign is not.
     dollars = r"Формула $E=mc^2$ используется. Цена $5, другая цена $10. Экранировано \$5."
