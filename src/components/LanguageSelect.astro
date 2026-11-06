@@ -10,57 +10,128 @@ const relativeSlug = locale === 'root'
   ? currentId
   : currentId === locale ? '' : currentId.slice(locale.length + 1);
 const languages = [
-  { code: 'root', prefix: '', label: 'Српски', lang: 'sr' },
-  { code: 'ru', prefix: 'ru', label: 'Русский', lang: 'ru' },
-  { code: 'en', prefix: 'en', label: 'English', lang: 'en' },
-].map(({ code, prefix, label, lang }) => {
+  { code: 'root', prefix: '', label: 'Српски', short: 'SR', lang: 'sr' },
+  { code: 'ru', prefix: 'ru', label: 'Русский', short: 'RU', lang: 'ru' },
+  { code: 'en', prefix: 'en', label: 'English', short: 'EN', lang: 'en' },
+].map(({ code, prefix, label, short, lang }) => {
   const targetId = [prefix, relativeSlug].filter(Boolean).join('/');
   const translated = existing.has(targetId);
   const href = '/' + (translated ? targetId : prefix);
-  return { code, label, lang, translated, href: href === '/' ? href : href + '/' };
+  return { code, label, short, lang, translated, href: href === '/' ? href : href + '/' };
 });
+const current = languages.find(({ code }) => code === locale) ?? languages[0];
 const ariaLabel = locale === 'ru' ? 'Выбор языка' : locale === 'en' ? 'Choose language' : 'Избор језика';
+const missingLabel = locale === 'ru' ? 'Перевода нет — открыть главную'
+  : locale === 'en' ? 'No translation — open language home'
+  : 'Нема превода — отвори почетну страницу';
 ---
 
-<nav class="locale-links" aria-label={ariaLabel}>
-  {languages.map((lang) => (
-    <a
-      href={lang.href}
-      lang={lang.lang}
-      hreflang={lang.lang}
-      aria-current={lang.code === locale ? 'page' : undefined}
-      title={!lang.translated
-        ? locale === 'ru' ? 'Перевода нет — перейти на главную' : locale === 'en'
-          ? 'No translation — go to the home page' : 'Нема превода — пређи на почетну'
-        : undefined}
-    >{lang.label}</a>
-  ))}
+<nav class="language-control" aria-label={ariaLabel}>
+  <div class="language-track sl-hidden md:sl-flex" data-sves-desktop-languages>
+    {languages.map((lang) => (
+      <a href={lang.href} lang={lang.lang} hreflang={lang.lang}
+        aria-current={lang.code === locale ? 'page' : undefined}
+        title={lang.translated ? lang.label : lang.label + ' · ' + missingLabel}
+        data-language-target={lang.code}>
+        {lang.short}
+      </a>
+    ))}
+  </div>
+  <label class="language-mobile md:sl-hidden">
+    <span class="sr-only">{ariaLabel}</span>
+    <span aria-hidden="true">{current?.short}</span>
+    <select aria-label={ariaLabel} data-sves-language-mobile>
+      {languages.map((lang) => (
+        <option value={lang.href} selected={lang.code === locale}>
+          {lang.label}{lang.translated ? '' : ' — ' + missingLabel}
+        </option>
+      ))}
+    </select>
+    <svg aria-hidden="true" viewBox="0 0 12 12"><path d="m3 4 3 3 3-3" /></svg>
+  </label>
 </nav>
 
+<script>
+  document.addEventListener('change', (event) => {
+    if (!(event.target instanceof HTMLSelectElement)) return;
+    if (!event.target.matches('[data-sves-language-mobile]')) return;
+    window.location.assign(event.target.value);
+  });
+  window.addEventListener('pageshow', (event) => {
+    if (!event.persisted) return;
+    document.querySelectorAll<HTMLSelectElement>('[data-sves-language-mobile]').forEach((select) => {
+      const selected = select.querySelector<HTMLOptionElement>('option[selected]');
+      if (selected) select.value = selected.value;
+    });
+  });
+</script>
+
 <style>
-  .locale-links {
+  .language-track {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 0.15rem;
-    font-size: var(--sl-text-xs);
+    gap: 1px;
+    padding: 1px;
+    background: var(--sl-color-bg);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.7rem;
+    line-height: 1;
   }
-  .locale-links a {
+  .language-track a {
     color: var(--sl-color-gray-2);
-    border: 1px solid transparent;
-    padding: 0.35rem 0.45rem;
-    border-radius: 0.4rem;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-  .locale-links a:hover,
-  .locale-links a:focus-visible {
-    color: var(--sl-color-white);
-    border-color: var(--sl-color-gray-4);
-  }
-  .locale-links a[aria-current='page'] {
-    color: var(--sl-color-text-accent);
-    border-color: var(--sl-color-gray-4);
     font-weight: 600;
+    font-size: 0.65rem;
+    text-decoration: none;
+    border-radius: 0.6rem;
+    text-align: center;
+    padding: 0.35rem 0.32rem;
+    min-width: 1.65rem;
+  }
+  .language-track a:hover,
+  .language-track a:focus-visible { color: var(--sl-color-white); }
+  .language-track a[aria-current='page'] {
+    color: var(--sl-color-text-accent);
+    background: var(--sl-color-gray-6);
+    box-shadow: inset 0 0 0 1px var(--sl-color-gray-5);
+  }
+  .language-mobile {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.55rem;
+    height: 2.5rem;
+    color: var(--sl-color-white);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg-nav);
+    font-weight: 600;
+    font-size: 0.75rem;
+  }
+  .language-mobile:hover, .language-mobile:focus-within {
+    border-color: var(--sl-color-accent);
+  }
+  .language-mobile select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+    opacity: 0;
+    font-size: 1rem;
+  }
+  .language-mobile svg {
+    width: 0.6rem;
+    height: 0.6rem;
+    margin-inline-start: 0.12rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+  }
+  @media (min-width: 50rem) {
+    .language-mobile { display: none; }
+  }
+  @media (max-width: 49.999rem) {
+    .language-track { display: none; }
   }
 </style>

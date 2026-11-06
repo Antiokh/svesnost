@@ -13,7 +13,9 @@ export default defineConfig({
       },
       routeMiddleware: './src/route-middleware.ts',
       components: {
+        Header: './src/components/Header.astro',
         LanguageSelect: './src/components/LanguageSelect.astro',
+        ThemeSelect: './src/components/ThemeSelect.astro',
       },
       customCss: ['./src/styles/theme.css'],
       logo: { src: './src/assets/logo.svg', alt: 'Свесност' },

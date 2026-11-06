@@ -1,15 +1,69 @@
-/* Основные типографические параметры соответствуют RSLive.
-   Все компоненты страницы остаются стандартными компонентами Starlight. */
+/* Svesnost is a minimal Starlight site with a few navigation and reading UX refinements.
+   Keep global CSS narrow: stock Starlight owns mobile popover, focus and basic layout. */
 :root {
   --sl-content-width: 54rem;
   --sl-text-5xl: 2.35rem;
 }
 
-.sl-markdown-content table {
-  font-size: 0.92rem;
+.sl-markdown-content table { font-size: 0.92rem; }
+.sl-markdown-content > :is(ul, ol),
+.sl-markdown-content li > :is(ul, ol) { margin-bottom: 1rem; }
+
+/* The mobile navigation remains the native Starlight Popover (Escape, focus trap,
+   scroll locking). Adapt the RSLive slide-in animation to the new :popover-open API. */
+@media (max-width: 49.999rem) {
+  #starlight__sidebar.sidebar-pane {
+    opacity: 0;
+    transform: translateX(-100%);
+    transition: transform 0.26s ease, opacity 0.2s ease, display 0.26s allow-discrete;
+  }
+  #starlight__sidebar.sidebar-pane:popover-open {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  @starting-style {
+    #starlight__sidebar.sidebar-pane:popover-open {
+      opacity: 0;
+      transform: translateX(-100%);
+    }
+  }
+  [dir='rtl'] #starlight__sidebar.sidebar-pane { transform: translateX(100%); }
+  [dir='rtl'] #starlight__sidebar.sidebar-pane:popover-open { transform: translateX(0); }
 }
 
-.sl-markdown-content > :is(ul, ol),
-.sl-markdown-content li > :is(ul, ol) {
-  margin-bottom: 1rem;
+/* Compact, accessible native selects in the stock mobile preferences footer. */
+@media (max-width: 49.999rem) {
+  .mobile-preferences { align-items: center; column-gap: 0.5rem; row-gap: 0.5rem; }
+}
+
+/* Optional desktop reading modes. No TwoColumnContent override is necessary. */
+@media (min-width: 72rem) {
+  html.sves-hide-sidebar[data-has-sidebar] {
+    --sl-content-inline-start: 0rem;
+  }
+  html.sves-hide-sidebar .sidebar-pane {
+    visibility: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  html.sves-hide-sidebar .main-frame { padding-inline-start: 0; }
+
+  html.sves-hide-toc .right-sidebar-container,
+  html.sves-auto-hide-toc .right-sidebar-container { display: none; }
+  html:is(.sves-hide-toc, .sves-auto-hide-toc)[data-has-sidebar][data-has-toc] .main-pane {
+    --sl-content-margin-inline: auto;
+    width: 100%;
+  }
+
+  html:is(.sves-hide-sidebar, .sves-hide-toc, .sves-auto-hide-toc) {
+    --sl-content-width: min(70rem, calc(100vw - 3rem));
+  }
+  html.sves-hide-sidebar:is(.sves-hide-toc, .sves-auto-hide-toc) {
+    --sl-content-width: min(92rem, calc(100vw - 3rem));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #starlight__sidebar.sidebar-pane { transition: none; }
 }

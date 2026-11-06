@@ -1,0 +1,187 @@
+---
+/*
+ * Desktop three-position theme toggle inspired by RSLive.
+ * The compact mobile select is native and keeps Starlight's storage contract.
+ */
+const lang = Astro.locals.starlightRoute.lang;
+const labels = lang === 'ru'
+  ? { select: 'Выбор темы', light: 'Светлая', auto: 'Как в системе', dark: 'Тёмная' }
+  : lang === 'en'
+    ? { select: 'Choose theme', light: 'Light', auto: 'System', dark: 'Dark' }
+    : { select: 'Избор теме', light: 'Светла', auto: 'Системска', dark: 'Тамна' };
+---
+
+<div class="sves-theme-control">
+  <button type="button" class="theme-track sl-hidden md:sl-flex"
+    role="slider" tabindex="0" aria-label={labels.select} aria-valuemin="0"
+    aria-valuemax="2" aria-valuenow="1" aria-valuetext={labels.auto}
+    title={labels.auto}
+    data-sves-theme-slider data-theme-mode="auto"
+    data-label-light={labels.light} data-label-auto={labels.auto} data-label-dark={labels.dark}>
+    <span class="theme-segment" aria-hidden="true">☀</span>
+    <span class="theme-segment" aria-hidden="true">A</span>
+    <span class="theme-segment" aria-hidden="true">☾</span>
+    <span class="theme-knob" aria-hidden="true"></span>
+  </button>
+  <label class="theme-mobile md:sl-hidden">
+    <span class="sr-only">{labels.select}</span>
+    <span data-sves-theme-icon aria-hidden="true">A</span>
+    <select data-sves-theme-mobile aria-label={labels.select}>
+      <option value="light">{labels.light}</option>
+      <option value="auto" selected>{labels.auto}</option>
+      <option value="dark">{labels.dark}</option>
+    </select>
+    <svg aria-hidden="true" viewBox="0 0 12 12"><path d="m3 4 3 3 3-3" /></svg>
+  </label>
+</div>
+
+<script>
+  type Theme = 'light' | 'auto' | 'dark';
+  const modes: Theme[] = ['light', 'auto', 'dark'];
+  const storageKey = 'starlight-theme';
+  const system = matchMedia('(prefers-color-scheme: light)');
+  const loadMode = (): Theme => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      return saved === 'light' || saved === 'dark' ? saved : 'auto';
+    } catch {
+      return 'auto';
+    }
+  };
+  const labelsFor = (button: HTMLButtonElement, mode: Theme) =>
+    button.getAttribute('data-label-' + mode) ?? mode;
+
+  function sync(theme = loadMode()) {
+    document.querySelectorAll<HTMLButtonElement>('[data-sves-theme-slider]').forEach((button) => {
+      button.dataset.themeMode = theme;
+      button.setAttribute('aria-valuenow', String(modes.indexOf(theme)));
+      button.setAttribute('aria-valuetext', labelsFor(button, theme));
+      button.title = labelsFor(button, theme);
+    });
+    document.querySelectorAll<HTMLSelectElement>('[data-sves-theme-mobile]').forEach((select) => {
+      select.value = theme;
+    });
+    document.querySelectorAll<HTMLElement>('[data-sves-theme-icon]').forEach((icon) => {
+      icon.textContent = theme === 'light' ? '☀' : theme === 'dark' ? '☾' : 'A';
+    });
+  }
+  function apply(theme: Theme) {
+    document.documentElement.dataset.theme = theme === 'auto' ? (system.matches ? 'light' : 'dark') : theme;
+    try { localStorage.setItem(storageKey, theme === 'auto' ? '' : theme); } catch {}
+    window.StarlightThemeProvider?.updatePickers(theme);
+    sync(theme);
+  }
+  sync();
+  system.addEventListener('change', () => {
+    if (loadMode() === 'auto') {
+      document.documentElement.dataset.theme = system.matches ? 'light' : 'dark';
+      sync('auto');
+    }
+  });
+  document.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) return;
+    const button = event.target.closest<HTMLButtonElement>('[data-sves-theme-slider]');
+    if (!button) return;
+    const rect = button.getBoundingClientRect();
+    const fraction = rect.width ? ((event.clientX - rect.left) / rect.width) : 0.5;
+    apply(modes[Math.min(2, Math.max(0, Math.floor(fraction * 3)))]!);
+  });
+  document.addEventListener('change', (event) => {
+    if (!(event.target instanceof HTMLSelectElement)) return;
+    if (!event.target.matches('[data-sves-theme-mobile]')) return;
+    const value = event.target.value;
+    if (modes.includes(value as Theme)) apply(value as Theme);
+  });
+  document.addEventListener('keydown', (event) => {
+    if (!(event.target instanceof Element)) return;
+    const button = event.target.closest<HTMLButtonElement>('[data-sves-theme-slider]');
+    if (!button) return;
+    const position = modes.indexOf(loadMode());
+    let next: number;
+    if (event.key === 'ArrowLeft') next = Math.max(0, position - 1);
+    else if (event.key === 'ArrowRight') next = Math.min(2, position + 1);
+    else if (event.key === 'Home') next = 0;
+    else if (event.key === 'End') next = 2;
+    else return;
+    event.preventDefault();
+    apply(modes[next]!);
+  });
+  window.addEventListener('pageshow', () => sync());
+  document.addEventListener('astro:page-load', () => sync());
+</script>
+
+<style>
+  .sves-theme-control { display: inline-flex; align-items: center; }
+  .theme-track {
+    position: relative;
+    display: flex;
+    width: 4.3rem;
+    height: 1.5rem;
+    align-items: center;
+    justify-content: space-between;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 1rem;
+    padding: 0 0.15rem;
+    background: var(--sl-color-bg);
+    color: var(--sl-color-gray-3);
+    cursor: pointer;
+  }
+  .theme-track:hover, .theme-track:focus-visible { border-color: var(--sl-color-accent); }
+  .theme-segment {
+    width: 1.2rem;
+    text-align: center;
+    font-size: 0.76rem;
+    line-height: 1;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .theme-knob {
+    position: absolute;
+    top: 1px;
+    left: 1px;
+    height: calc(100% - 2px);
+    width: calc((100% - 2px) / 3);
+    border-radius: 999px;
+    background: var(--sl-color-gray-6);
+    box-shadow: inset 0 0 0 1px var(--sl-color-gray-5), var(--sl-shadow-sm);
+    pointer-events: none;
+    transition: transform 0.2s ease;
+  }
+  .theme-track[data-theme-mode='auto'] .theme-knob { transform: translateX(100%); }
+  .theme-track[data-theme-mode='dark'] .theme-knob { transform: translateX(200%); }
+  .theme-mobile {
+    display: inline-flex;
+    position: relative;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.55rem;
+    height: 2.5rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg-nav);
+    color: var(--sl-color-white);
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .theme-mobile:hover, .theme-mobile:focus-within { border-color: var(--sl-color-accent); }
+  .theme-mobile select {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    cursor: pointer;
+    font-size: 1rem;
+  }
+  .theme-mobile svg {
+    margin-inline-start: 0.15rem;
+    width: 0.6rem;
+    height: 0.6rem;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.6;
+  }
+  @media (max-width: 49.999rem) { .theme-track { display: none; } }
+  @media (min-width: 50rem) { .theme-mobile { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .theme-knob { transition: none; } }
+</style>

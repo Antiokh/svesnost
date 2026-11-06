@@ -1,0 +1,226 @@
+---
+/*
+ * Minimal Starlight Header override.
+ * Keep the stock Search/SiteTitle/SocialIcons and layout; expose language/theme
+ * controls on mobile splash pages, which have no sidebar/mobile preferences.
+ * Desktop reading-panel controls do not require overriding TwoColumnContent.
+ */
+import config from 'virtual:starlight/user-config';
+import LanguageSelect from 'virtual:starlight/components/LanguageSelect';
+import Search from 'virtual:starlight/components/Search';
+import SiteTitle from 'virtual:starlight/components/SiteTitle';
+import SocialIcons from 'virtual:starlight/components/SocialIcons';
+import ThemeSelect from 'virtual:starlight/components/ThemeSelect';
+
+const route = Astro.locals.starlightRoute;
+const { hasSidebar, toc, headings } = route;
+const hasToc = Boolean(toc);
+const shortToc = hasToc && headings.filter(({ depth }) => depth >= 2 && depth <= 3).length < 2;
+const showTocToggle = hasToc && !shortToc;
+const shouldRenderSearch = config.pagefind || config.components.Search !== '@astrojs/starlight/components/Search.astro';
+const lang = route.lang;
+const copy = lang === 'ru'
+  ? { menu: 'Скрыть боковое меню', toc: 'Скрыть оглавление', restore: 'Показать оглавление' }
+  : lang === 'en'
+    ? { menu: 'Hide sidebar', toc: 'Hide table of contents', restore: 'Show table of contents' }
+    : { menu: 'Сакриј бочни мени', toc: 'Сакриј садржај', restore: 'Прикажи садржај' };
+---
+
+{shortToc && <script is:inline>document.documentElement.classList.add('sves-auto-hide-toc');</script>}
+
+<div class="header">
+  <div class="title-wrapper sl-flex"><SiteTitle /></div>
+  <div class="sl-flex print:hidden search-wrapper">{shouldRenderSearch && <Search />}</div>
+
+  {/* On splash pages Starlight has no sidebar to hold its mobile preferences. */}
+  {!hasSidebar && (
+    <div class="mobile-utilities md:sl-hidden print:hidden" data-sves-mobile-toolbar>
+      <ThemeSelect />
+      <LanguageSelect />
+    </div>
+  )}
+
+  <div class="sl-hidden md:sl-flex print:hidden right-group">
+    <div class="social-icons sl-flex"><SocialIcons /></div>
+    <div class="panel-controls" data-sves-panel-controls>
+      {hasSidebar && (
+        <button type="button" class="panel-toggle" data-panel-toggle="sidebar"
+          aria-pressed="false" aria-label={copy.menu} title={copy.menu}>
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"
+            stroke-linecap="round" stroke-width="2"><path d="M4 5h16M4 12h16M4 19h16"/></svg>
+        </button>
+      )}
+      {showTocToggle && (
+        <button type="button" class="panel-toggle" data-panel-toggle="toc"
+          aria-pressed="false" aria-label={copy.toc} title={copy.toc}>
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"
+            stroke-linecap="round" stroke-width="1.8"><path d="M12 5v15M3 18V6a2 2 0 0 1 2-2h4a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H5a2 2 0 0 0-2 1ZM21 18V6a2 2 0 0 0-2-2h-4a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h4a2 2 0 0 1 2 1Z"/></svg>
+        </button>
+      )}
+    </div>
+    <ThemeSelect />
+    <LanguageSelect />
+  </div>
+</div>
+
+{showTocToggle && (
+  <button type="button" class="toc-restore print:hidden" data-panel-toggle="toc"
+    aria-pressed="false" aria-label={copy.restore} title={copy.restore}>
+    <span aria-hidden="true">‹</span>
+  </button>
+)}
+
+<script>
+  type Panel = 'sidebar' | 'toc';
+  const sidebarKey = 'svesnost:sidebar-hidden';
+  const tocKey = () => 'svesnost:toc-hidden:' + location.pathname;
+  const text = {
+    ru: {
+      sidebar: ['Скрыть боковое меню', 'Показать боковое меню'],
+      toc: ['Скрыть оглавление', 'Показать оглавление'],
+    },
+    en: {
+      sidebar: ['Hide sidebar', 'Show sidebar'],
+      toc: ['Hide table of contents', 'Show table of contents'],
+    },
+    sr: {
+      sidebar: ['Сакриј бочни мени', 'Прикажи бочни мени'],
+      toc: ['Сакриј садржај', 'Прикажи садржај'],
+    },
+  };
+  const currentCopy = () => text[document.documentElement.lang as keyof typeof text] ?? text.sr;
+  const panelClass = (panel: Panel) => panel === 'sidebar' ? 'sves-hide-sidebar' : 'sves-hide-toc';
+  const hidden = (panel: Panel) => document.documentElement.classList.contains(panelClass(panel));
+  const refresh = () => {
+    document.querySelectorAll<HTMLButtonElement>('[data-panel-toggle]').forEach((button) => {
+      const panel = button.dataset.panelToggle as Panel;
+      const isHidden = hidden(panel);
+      button.setAttribute('aria-pressed', isHidden ? 'true' : 'false');
+      const isRestore = button.classList.contains('toc-restore');
+      const label = currentCopy()[panel][isRestore ? 1 : (isHidden ? 1 : 0)];
+      button.setAttribute('aria-label', label);
+      button.title = label;
+    });
+  };
+  const restore = () => {
+    try {
+      document.documentElement.classList.toggle(panelClass('sidebar'), sessionStorage.getItem(sidebarKey) === '1');
+      document.documentElement.classList.toggle(panelClass('toc'), localStorage.getItem(tocKey()) === '1');
+    } catch {
+      // Browsers may disable Web Storage. Panel controls still work for this page.
+    }
+    refresh();
+  };
+  restore();
+  document.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element)) return;
+    const button = event.target.closest<HTMLButtonElement>('[data-panel-toggle]');
+    if (!button) return;
+    const panel = button.dataset.panelToggle as Panel;
+    if (panel !== 'sidebar' && panel !== 'toc') return;
+    const next = !hidden(panel);
+    document.documentElement.classList.toggle(panelClass(panel), next);
+    try {
+      if (panel === 'sidebar') sessionStorage.setItem(sidebarKey, next ? '1' : '0');
+      else localStorage.setItem(tocKey(), next ? '1' : '0');
+    } catch {}
+    refresh();
+  });
+  window.addEventListener('pageshow', refresh);
+  document.addEventListener('astro:page-load', restore);
+</script>
+
+<style>
+  @layer starlight.core {
+    .header {
+      display: flex;
+      gap: var(--sl-nav-gap);
+      justify-content: space-between;
+      align-items: center;
+      height: 100%;
+    }
+    .title-wrapper {
+      overflow: clip;
+      padding: 0.25rem;
+      margin: -0.25rem;
+      min-width: 0;
+    }
+    .right-group, .social-icons {
+      gap: 0.75rem;
+      align-items: center;
+    }
+    .social-icons::after {
+      content: '';
+      height: 2rem;
+      border-inline-end: 1px solid var(--sl-color-gray-5);
+    }
+    .mobile-utilities {
+      display: flex;
+      flex-shrink: 0;
+      gap: 0.25rem;
+      align-items: center;
+    }
+    .panel-controls { display: none; gap: 0.35rem; }
+    .panel-toggle {
+      border: 1px solid var(--sl-color-gray-5);
+      background: var(--sl-color-bg);
+      color: var(--sl-color-white);
+      padding: 0.2rem;
+      border-radius: 0.5rem;
+      width: 2rem;
+      height: 2rem;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+    }
+    .panel-toggle:hover, .panel-toggle:focus-visible {
+      border-color: var(--sl-color-accent);
+    }
+    .panel-toggle[aria-pressed='true'] {
+      background: var(--sl-color-gray-6);
+      color: var(--sl-color-text-accent);
+    }
+    .panel-toggle svg { width: 1.1rem; height: 1.1rem; }
+
+    .toc-restore {
+      display: none;
+      position: fixed;
+      z-index: var(--sl-z-index-toc);
+      right: 0;
+      top: 42%;
+      width: 1.5rem;
+      height: 4rem;
+      border: 1px solid var(--sl-color-gray-5);
+      border-radius: 0.5rem 0 0 0.5rem;
+      background: var(--sl-color-bg-nav);
+      color: var(--sl-color-text);
+      cursor: pointer;
+    }
+    .toc-restore:hover { color: var(--sl-color-text-accent); }
+
+    @media (min-width: 50rem) {
+      :global(:root[data-has-sidebar]) { --__sidebar-pad: calc(2 * var(--sl-nav-pad-x)); }
+      :global(:root:not([data-has-toc])) { --__toc-width: 0rem; }
+      .header {
+        --__sidebar-width: max(0rem, var(--sl-content-inline-start, 0rem) - var(--sl-nav-pad-x));
+        --__main-column-fr: calc(
+          (100% + var(--__sidebar-pad, 0rem) - var(--__toc-width, var(--sl-sidebar-width)) -
+            (2 * var(--__toc-width, var(--sl-nav-pad-x))) - var(--sl-content-inline-start, 0rem) -
+            var(--sl-content-width)) / 2
+        );
+        display: grid;
+        grid-template-columns:
+          minmax(calc(var(--__sidebar-width) + max(0rem, var(--__main-column-fr) - var(--sl-nav-gap))), auto)
+          1fr auto;
+        align-content: center;
+      }
+    }
+    @media (min-width: 72rem) {
+      .panel-controls { display: flex; }
+      :global(html.sves-hide-toc) .toc-restore { display: block; }
+    }
+    @media (max-width: 49.999rem) {
+      .search-wrapper { margin-inline-start: auto; }
+    }
+  }
+</style>
