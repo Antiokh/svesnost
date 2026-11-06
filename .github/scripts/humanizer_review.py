@@ -129,14 +129,14 @@ def _table_cells(line: str) -> list[str] | None:
             i += 2
             continue
         if row[i] == chr(96):
-            ticks = len(row) - len(row[i:].lstrip(chr(96)))
+            ticks = len(row[i:]) - len(row[i:].lstrip(chr(96)))
             j = i + ticks
             closing = None
             while j < len(row):
                 if row[j] == "\\" and j + 1 < len(row):
                     j += 2
                 elif row[j] == chr(96):
-                    close_ticks = len(row) - len(row[j:].lstrip(chr(96)))
+                    close_ticks = len(row[j:]) - len(row[j:].lstrip(chr(96)))
                     if close_ticks == ticks:
                         closing = j + close_ticks
                         break
