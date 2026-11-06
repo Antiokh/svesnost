@@ -761,6 +761,25 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert language(DOCS + "story.mdx") == "sr"
     assert language("docs/story.md") is None
     assert prose_only("---\ntitle: private\n") == ""
+
+    # Indented YAML block scalar delimiters are data, not closing frontmatter.
+    # Only a column-zero delimiter ends the metadata section.
+    for closing in ("---", "..."):
+        yaml_scalar = (
+            "---\n"
+            "description: |\n"
+            "  ---\n"
+            "  ...\n"
+            "  СЛУЖЕБНАЯ ПРОЗА МЕТАДАННЫХ\n"
+            + closing + "   \n"
+            "# Видимый заголовок\n"
+            "Следующий абзац.\n"
+        )
+        extracted = prose_only(yaml_scalar)
+        assert "СЛУЖЕБНАЯ ПРОЗА МЕТАДАННЫХ" not in extracted, extracted
+        assert "Видимый заголовок" in extracted, extracted
+        assert "Следующий абзац." in extracted, extracted
+
     special = "Проза до формулы.\n---\n:::note\nСодержимое примечания — это проза.\n:::\n@MATH@\nx^2 + 1\n@MATH@\nИ проза после.\n".replace("@MATH@", chr(36) * 2).replace("@MATH@", chr(36) * 2)
     isolated = prose_only(special)
     assert "Проза до формулы." in isolated and "Содержимое примечания" in isolated
@@ -831,6 +850,25 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     )
     extracted = prose_only(in_code)
     assert "Проза после блока." in extracted, extracted
+
+    # Escaped Markdown delimiters remain readable: neither \{ nor \<!--
+    # may start an MDX expression or HTML comment that eats later paragraphs.
+    literal_delimiters = (
+        r"Буквальная \{ скобка." + "\n" + "Следующий абзац.",
+        r"Пишите \<!-- буквально." + "\n" + "Следующий абзац.",
+        r"Буквальная \\\{ скобка." + "\n" + "Следующий абзац.",
+        r"Пишите \\\<!-- буквально." + "\n" + "Следующий абзац.",
+    )
+    for sample in literal_delimiters:
+        extracted = prose_only(sample)
+        assert "Следующий абзац." in extracted, ("escaped delimiter consumed prose", sample, extracted)
+        assert "Буквальная" in extracted or "Пишите" in extracted, extracted
+    assert "Литерал перед выражением" in prose_only(
+        r"Литерал перед выражением \{ и затем {handler('SECRET')} остаётся видимым."
+    )
+    assert "SECRET" not in prose_only(
+        r"Литерал перед выражением \{ и затем {handler('SECRET')} остаётся видимым."
+    )
 
     # The literal <!-- inside inline code, an MDX attribute or a JS expression
     # cannot open an HTML comment and consume following reader-visible text.
@@ -952,6 +990,25 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
             assert value in result, ("lost prose beside table", value, result)
         for value in hidden:
             assert value not in result, ("HTML/JSX table leaked", value, result)
+
+    # Multi-line list-indented code remains code until it dedents, including
+    # after intervening blank lines and with Markdown-like syntax inside code.
+    list_code = (
+        "- Видимый пункт\n"
+        "\n"
+        "      КОД_1\n"
+        "      КОД_2\n"
+        "\n"
+        "      - КОД_3\n"
+        "      ~~~\n"
+        "\n"
+        "После списка.\n"
+    )
+    list_code_result = prose_only(list_code)
+    assert "Видимый пункт" in list_code_result, list_code_result
+    assert "После списка." in list_code_result, list_code_result
+    for hidden in ("КОД_1", "КОД_2", "КОД_3", "~~~"):
+        assert hidden not in list_code_result, (hidden, list_code_result)
 
     # Indented nested list items are prose, but standalone indented blocks are code.
     nested = """- Основной пункт списка
