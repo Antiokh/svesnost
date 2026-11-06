@@ -1,9 +1,12 @@
 import { getCollection } from 'astro:content';
 import { defineRouteMiddleware } from '@astrojs/starlight/route-data';
+import { validateEntityCatalog } from './lib/entity-catalog.mjs';
 
 /** Routes belonging to real authored pages, never Starlight's generated fallbacks. */
+const authoredDocs = await getCollection('docs', ({ data }) => !data.draft);
+validateEntityCatalog(authoredDocs);
 const published = new Set(
-  (await getCollection('docs', ({ data }) => !data.draft)).map(({ id }) => {
+  authoredDocs.map(({ id }) => {
     const path = id === 'index' ? '' : id;
     return path ? '/' + path + '/' : '/';
   }),

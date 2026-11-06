@@ -11,7 +11,8 @@
     "build": "astro build",
     "test:i18n": "node scripts/check-i18n.mjs",
     "preview": "astro preview",
-    "test:ui": "playwright test"
+    "test:ui": "playwright test",
+    "test:model": "node scripts/check-entity-model.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.42.4",
