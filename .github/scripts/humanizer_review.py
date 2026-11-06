@@ -513,10 +513,11 @@ def normalize_reference_label(label: str) -> str:
 
 
 def mask_reference_definitions(text: str, chars: list[str]) -> set[str]:
-    """Hide reference targets and title continuations, including in quotes.
+    """Mask complete CommonMark link-reference definitions, not paragraph text.
 
-    Only definitions outside already-masked code/raw blocks are collected.
-    Return identifiers for recognizing shortcut-reference images.
+    A definition cannot interrupt a paragraph. Its destination can follow
+    the colon on the next line, and the optional title may span several lines.
+    Blockquote prefixes belong to the container, not the reference value.
     """
     labels: set[str] = set()
     lines = "".join(chars).splitlines(keepends=True)
@@ -525,23 +526,118 @@ def mask_reference_definitions(text: str, chars: list[str]) -> set[str]:
     for line in lines:
         offsets.append(offset)
         offset += len(line)
-    for index, line in enumerate(lines):
-        visible, quote_depth = _unquote_line(line)
-        match = re.match(r"^ {0,3}\[([^\]\n]+)\]:[ \t]*(\S.*)$",
-                         visible.rstrip("\r\n"))
-        if not match or match.group(1).startswith("^"):
-            continue
-        labels.add(normalize_reference_label(match.group(1)))
-        hide(chars, offsets[index], offsets[index] + len(line))
-        if index + 1 < len(lines):
-            next_visible, next_depth = _unquote_line(lines[index + 1])
-            if next_depth == quote_depth and re.fullmatch(
-                r"^[ \t]{1,3}(?:\"[^\"\n]*\"|'[^'\n]*'|\([^)\n]*\))[ \t]*",
-                next_visible.rstrip("\r\n")
-            ):
-                hide(chars, offsets[index + 1], offsets[index + 1] + len(lines[index + 1]))
-    return labels
 
+    def visible_line(index: int) -> tuple[str, int]:
+        content, depth = _unquote_line(lines[index])
+        return content.rstrip("\r\n"), depth
+
+    def title_end(start_line: int, pos: int, depth: int) -> int | None:
+        source, _ = visible_line(start_line)
+        opening = source[pos]
+        closing = ")" if opening == "(" else opening
+        for number in range(start_line, len(lines)):
+            content, actual_depth = visible_line(number)
+            if actual_depth != depth or not content.strip():
+                return None
+            cursor = pos + 1 if number == start_line else 0
+            while cursor < len(content):
+                if content[cursor] == "\\" and cursor + 1 < len(content):
+                    cursor += 2
+                    continue
+                if content[cursor] == closing:
+                    return number if not content[cursor + 1:].strip() else None
+                cursor += 1
+        return None
+
+    paragraph_depth: int | None = None
+    index = 0
+    while index < len(lines):
+        line, depth = visible_line(index)
+        stripped = line.strip()
+        if not stripped:
+            paragraph_depth = None
+            index += 1
+            continue
+        if paragraph_depth is not None and paragraph_depth != depth:
+            paragraph_depth = None
+        # Markdown heading, list, thematic break and JSX block boundaries
+        # interrupt the preceding paragraph; reference definitions do not.
+        structural = re.match(
+            r"^ {0,3}(?:#{1,6}[ \t]|[-*+][ \t]|\d+[.)][ \t]|"
+            r"<(?:/?[A-Za-z]|!--)|(?:---|\*\*\*|___)[ \t]*$)",
+            line,
+        )
+        if structural:
+            paragraph_depth = None
+        if paragraph_depth is not None:
+            index += 1
+            continue
+
+        marker = re.match(r"^ {0,3}\[([^\]\n]+)\]:[ \t]*(.*)$", line)
+        if not marker or marker.group(1).startswith("^"):
+            paragraph_depth = None if structural else depth
+            index += 1
+            continue
+
+        value = marker.group(2)
+        end_index = index
+        if not value.strip():
+            if index + 1 >= len(lines):
+                paragraph_depth = depth
+                index += 1
+                continue
+            following, following_depth = visible_line(index + 1)
+            if (following_depth != depth or not following.strip()
+                    or len(following) - len(following.lstrip(" ")) > 3):
+                paragraph_depth = depth
+                index += 1
+                continue
+            end_index = index + 1
+            value = following.lstrip(" \t")
+
+        # Separate one destination token from the optional title. A quoted
+        # destination <...> may contain spaces; a bare destination may not.
+        if value.startswith("<"):
+            match = re.match(r"^<[^<>\r\n]+>", value)
+        else:
+            match = re.match(r"^[^\s<>]+", value)
+        if not match:
+            paragraph_depth = depth
+            index += 1
+            continue
+        tail = value[match.end():]
+        if tail.strip():
+            if not tail[0].isspace() or tail.lstrip()[0] not in ("'", '"', "("):
+                paragraph_depth = depth
+                index += 1
+                continue
+            # title_end needs the position in the original visible line.
+            source, _ = visible_line(end_index)
+            opener = source.find(tail.lstrip(), source.find(match.group(0)))
+            if opener < 0:
+                paragraph_depth = depth
+                index += 1
+                continue
+            last_title = title_end(end_index, opener, depth)
+            if last_title is None:
+                paragraph_depth = depth
+                index += 1
+                continue
+            end_index = last_title
+        elif end_index + 1 < len(lines):
+            continuation, continuation_depth = visible_line(end_index + 1)
+            title_match = re.match(r"^ {1,3}([\"'(])", continuation)
+            if continuation_depth == depth and title_match:
+                last_title = title_end(end_index + 1, title_match.start(1), depth)
+                if last_title is not None:
+                    end_index = last_title
+
+        for line_index in range(index, end_index + 1):
+            hide(chars, offsets[line_index], offsets[line_index] + len(lines[line_index]))
+        labels.add(normalize_reference_label(marker.group(1)))
+        paragraph_depth = None
+        index = end_index + 1
+    return labels
 
 def mask_shortcut_reference_images(chars: list[str], labels: set[str]) -> None:
     """Only resolved ![alt] shortcuts are images; unknown labels stay text."""
@@ -708,7 +804,7 @@ def mdx_container_prose_lines(text: str) -> set[int]:
                         containers = containers[:index]
                         break
             elif containers or indent <= 3:
-                end = end_tag(visible, match.start() + len(match.group(0)) - len(tag) - 1)
+                end = end_tag(visible, visible.find("<", match.start(), match.end()))
                 if not visible[:end].rstrip().endswith("/>"):
                     containers.append((tag, indent))
         elif (containers and visible.strip() and indent >= 4
@@ -1134,7 +1230,6 @@ def prose_only(raw: str) -> str:
             if closing not in math_text[2:]:
                 in_math = (closing, quote_depth)
         elif (MODULE.match(line)
-              or REFERENCE.match(line)
               or re.match(r"^ {0,3}(?:::{1}|!{3})", line)
               or re.match(r"^ {0,3}(?:-{3,}|\*{3,}|_{3,})\s*$", line)
               or re.match(r"^\s*\|?\s*:?[-]{3,}:?\s*(?:\|.*)?$", line)):
