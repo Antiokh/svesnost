@@ -163,6 +163,34 @@ def _table_cells(line: str) -> list[str] | None:
     return cells
 
 
+
+def _unquote_line(line: str) -> tuple[str, int]:
+    """Remove Markdown blockquote container markers, preserving nested depth."""
+    content = line.rstrip("\r\n")
+    depth = 0
+    while match := re.match(r"^ {0,3}>[ \t]?", content):
+        content = content[match.end():]
+        depth += 1
+    return content, depth
+
+
+def _fence_line(line: str, list_indents: list[tuple[int, int]]) -> tuple[str, int]:
+    """The actual content line after blockquote or list indentation.
+
+    A four-space standalone code block must not start a fenced block, but
+    four-space indentation within a Markdown list is valid fence syntax.
+    """
+    visible, quote_depth = _unquote_line(line)
+    if quote_depth:
+        return visible, quote_depth
+    indent = len(line) - len(line.lstrip(" "))
+    if indent <= 3:
+        return line.rstrip("\r\n"), 0
+    if list_indents and indent >= list_indents[-1][1]:
+        return line.lstrip(" ").rstrip("\r\n"), 0
+    return "", 0
+
+
 def mask_gfm_tables(text: str, chars: list[str]) -> None:
     """Mask complete GFM tables, not just separator rows and pipe syntax."""
     lines = text.splitlines(keepends=True)
@@ -173,8 +201,12 @@ def mask_gfm_tables(text: str, chars: list[str]) -> None:
         offset += len(line)
 
     for index in range(1, len(lines)):
-        header = _table_cells(lines[index - 1])
-        separators = _table_cells(lines[index])
+        header_text, depth = _unquote_line(lines[index - 1])
+        separator_text, separator_depth = _unquote_line(lines[index])
+        if depth != separator_depth:
+            continue
+        header = _table_cells(header_text)
+        separators = _table_cells(separator_text)
         if not header or not separators or len(header) != len(separators):
             continue
         if not all(re.fullmatch(r":?-{3,}:?", cell) for cell in separators):
@@ -184,7 +216,10 @@ def mask_gfm_tables(text: str, chars: list[str]) -> None:
         if not any(char.strip() for char in chars[start:starts[index]]):
             continue
         end_index = index + 1
-        while end_index < len(lines) and _table_cells(lines[end_index]):
+        while end_index < len(lines):
+            row_text, row_depth = _unquote_line(lines[end_index])
+            if row_depth != depth or not _table_cells(row_text):
+                break
             end_index += 1
         for line_index in range(index - 1, end_index):
             hide(chars, starts[line_index], starts[line_index] + len(lines[line_index]))
@@ -253,13 +288,16 @@ def prose_only(raw: str) -> str:
                 list_indents.clear()
             after_blank = False
 
-        fence = FENCE.match(line)
+        fence_text, quote_depth = _fence_line(line, list_indents)
+        fence = FENCE.match(fence_text)
         # The active block wins. A math delimiter inside fenced code is code,
         # and a code fence inside a math block must not affect block state.
         if in_fence:
             hide(chars, offset, offset + len(line))
-            if (trimmed.rstrip().startswith(in_fence[0] * in_fence[1])
-                    and not trimmed.rstrip().lstrip(in_fence[0]).strip()):
+            if (quote_depth == in_fence[2] and fence
+                    and fence.group(1)[0] == in_fence[0]
+                    and len(fence.group(1)) >= in_fence[1]
+                    and not fence_text[fence.end():].strip()):
                 in_fence = None
         elif in_math:
             hide(chars, offset, offset + len(line))
@@ -267,7 +305,7 @@ def prose_only(raw: str) -> str:
                 in_math = None
         elif fence:
             marker = fence.group(1)
-            in_fence = (marker[0], len(marker))
+            in_fence = (marker[0], len(marker), quote_depth)
             hide(chars, offset, offset + len(line))
         elif trimmed.startswith((chr(36) * 2, r"\[")):
             hide(chars, offset, offset + len(line))
