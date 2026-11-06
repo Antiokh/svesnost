@@ -456,7 +456,7 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
         next_close[index] = following_close
     pos = 0
     while pos < len(text):
-        image = text.startswith("![", pos)
+        image = text.startswith("![", pos) and not is_markdown_escaped(text, pos)
         bracket = pos + 1 if image else pos
         if (bracket >= len(text) or text[bracket] != "["
                 or is_markdown_escaped(text, bracket)):
@@ -679,6 +679,21 @@ def mask_shortcut_reference_images(chars: list[str], labels: set[str]) -> None:
         # shortcut reference link. Only an unescaped '!' opens an image.
         if (not is_markdown_escaped(source, match.start())
                 and normalize_reference_label(match.group(1)) in labels):
+            hide(chars, *match.span())
+
+
+def mask_uri_autolinks(chars: list[str]) -> None:
+    """Hide CommonMark <scheme:destination> autolinks outside masked code.
+
+    A scheme is 2-32 characters, starting with an ASCII letter and followed
+    by ASCII letters, digits, '.', '+' or '-'. The URI has no whitespace,
+    controls or angle brackets. Use the live shadow so fenced/inline code,
+    link targets, JSX attributes and raw blocks are already excluded.
+    """
+    source = "".join(chars)
+    pattern = re.compile(r"<[A-Za-z][A-Za-z0-9.+-]{1,31}:[^\x00-\x20<>]+>")
+    for match in pattern.finditer(source):
+        if not is_markdown_escaped(source, match.start()):
             hide(chars, *match.span())
 
 
@@ -1326,6 +1341,9 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
     # Hide link targets before the HTML/MDX pass: a comment-looking title or
     # expression inside a link must never be interpreted as real markup.
     mask_inline_link_targets(text, chars)
+    # URI-autolinks are not HTML tags. Remove them before the HTML/JSX pass,
+    # which could otherwise misinterpret a scheme such as 'ftp:' as a tag.
+    mask_uri_autolinks(chars)
 
     pos = 0
     while pos < len(text):
