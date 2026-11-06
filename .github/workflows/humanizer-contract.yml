@@ -60,6 +60,37 @@ jobs:
           assert isinstance(sr.review("Ово је обичан проверни текст на српском језику."), list)
           assert isinstance(adapter.russian_new(ru, "", "Здесь другое короткое предложение."), list)
           assert isinstance(adapter.serbian_new(sr, "", "Ово је још једна проверна реченица."), list)
+
+          # The pinned Serbian checker exposes only five preview examples, but
+          # full evidence must detect changes beyond that preview.
+          scenarios = [
+              (
+                  "sr_ai_triplet_density",
+                  [f"Јабука{i}, крушка{i} и шљива{i}." for i in range(6)],
+                  "Малина99, јагода99 и боровница99.",
+                  "Malina99",
+              ),
+              (
+                  "sr_ai_negative_parallelism_density",
+                  [f"Није исход{i} већ резултат{i}." for i in range(6)],
+                  "Није избор99 већ одлука99.",
+                  "izbor99",
+              ),
+          ]
+          for rule_id, rows, changed, needle in scenarios:
+              original = "\n".join(rows)
+              updated = "\n".join([*rows[:5], changed])
+              previous = next(item for item in sr.review(original) if item.rule_id == rule_id)
+              current = next(item for item in sr.review(updated) if item.rule_id == rule_id)
+              assert previous.count == current.count == 6
+              assert len(previous.evidence) == len(current.evidence) == 5
+              assert previous.evidence == current.evidence
+              changes = [item for item in adapter.serbian_new(sr, original, updated) if item["rule_id"] == rule_id]
+              assert len(changes) == 1, (rule_id, changes)
+              assert changes[0]["count"] == 1, changes
+              assert any(needle.casefold() in item.casefold() for item in changes[0]["evidence"]), changes
+              assert not [item for item in adapter.serbian_new(sr, original, original) if item["rule_id"] == rule_id]
+          print("Pinned Serbian reviewer: sixth-and-later replacement detection OK")
           print("Language editor APIs: OK")
           PY
 
