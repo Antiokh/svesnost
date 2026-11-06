@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { checkMediaFile } from '../src/lib/entity-files.mjs';
 import { buildEntityProjections } from '../src/lib/entity-projections.mjs';
+import { buildEntityData, discoverDocs } from './build-entities.mjs';
 import { z } from 'astro/zod';
 import { entityFields, ENTITY_KINDS, SOURCE_TYPES, MEDIA_TYPES } from '../src/lib/entity-schema.mjs';
 import { validateEntityCatalog } from '../src/lib/entity-catalog.mjs';
@@ -124,4 +125,35 @@ try {
 } finally {
   rmSync(dir,{recursive:true,force:true});
 }
-console.log('Entity fields, relationship hierarchies, assets and derived views: OK');
+const work = mkdtempSync(path.join(tmpdir(),'sves-model-input-'));
+try {
+  const docsRoot = path.join(work,'docs');
+  const outputRoot = path.join(work,'generated');
+  const folder = path.join(docsRoot,'places');
+  mkdirSync(folder,{recursive:true});
+  writeFileSync(path.join(folder,'_snippet.md'),'not a Starlight document');
+  const document = path.join(folder,'Example.markdown');
+  const valid = [
+    '---','title: Example','entity: place','entityId: place:example',
+    'url: /alternative/','id: person:other',
+    'geo:','  latitude: 44','  longitude: 20','---','Example body',
+  ].join('\n');
+  writeFileSync(document,valid);
+  assert.deepEqual((await discoverDocs(docsRoot)).map(x=>path.basename(x)),['Example.markdown']);
+  let projection = await buildEntityData({docsRoot,outputRoot});
+  assert.equal(projection.locales.sr.records[0].url,'/places/example/');
+  assert.equal(projection.locales.sr.records[0].id,'place:example');
+  const saved = readFileSync(path.join(outputRoot,'entity-index.json'),'utf8');
+  writeFileSync(document,valid.replace('latitude: 44','latitude: "oops"'));
+  await assert.rejects(buildEntityData({docsRoot,outputRoot}), /geo.latitude/);
+  assert.equal(readFileSync(path.join(outputRoot,'entity-index.json'),'utf8'),saved);
+  writeFileSync(document,valid);
+  writeFileSync(path.join(folder,'Second.mdown'),[
+    '---','title: Second','entity: place','entityId: place:second','---','Content',
+  ].join('\n'));
+  projection = await buildEntityData({docsRoot,outputRoot});
+  assert.equal(projection.locales.sr.records.length,2);
+} finally {
+  rmSync(work,{recursive:true,force:true});
+}
+console.log('Entity model, loader parity and raw metadata validation: OK');
