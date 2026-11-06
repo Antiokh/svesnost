@@ -2390,8 +2390,7 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
             (DOCS + "mdx-review.mdx", "видљив текст за српског уредника", "СЛУЖБЕНИ"),
         )
         changed = []
-        for path, (label, sentence, metadata) in zip(pair, pair):
-            document, phrase, secret = label, sentence, metadata
+        for document, phrase, secret in pair:
             target = head_dir / document
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(
