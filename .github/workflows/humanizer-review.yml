@@ -8,6 +8,11 @@ on:
       - 'src/content/docs/**/*.mdx'
       - '!src/content/docs/en/**'
 
+# Serialize publication per PR: a newer synchronize supersedes the old run.
+concurrency:
+  group: humanizer-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   pull-requests: write
@@ -63,7 +68,12 @@ jobs:
                 /\.(md|mdx)$/.test(file.filename) &&
                 !file.filename.startsWith('src/content/docs/en/')
               )
-              .map(file => file.filename);
+              .map(file => JSON.stringify({
+                head: file.filename,
+                base: file.status === 'renamed' && file.previous_filename
+                  ? file.previous_filename
+                  : file.filename,
+              }));
             fs.writeFileSync('/tmp/humanizer-files.txt', articles.join('\n'));
       - name: Fetch pinned language editors
         if: steps.trusted.outputs.ready == 'true'
@@ -104,18 +114,32 @@ jobs:
             const fs = require('fs');
             const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
             const marker = '<!-- svesnost-humanizer-review -->';
+            const { findOwnedReviewComment, isCurrentReviewHead } = require(
+              require('path').join(
+                process.env.GITHUB_WORKSPACE,
+                'base/.github/scripts/humanizer_comment.cjs'
+              )
+            );
+            // Concurrency cancels older runs; this also guards the final
+            // publishing step if a stale job survives cancellation.
+            const current = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (!isCurrentReviewHead(
+              context.payload.pull_request.head.sha,
+              current.data.head.sha
+            )) {
+              core.info('Skip obsolete Humanizer review: PR head has changed.');
+              return;
+            }
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: context.issue.number,
               per_page: 100,
             });
-            const { findOwnedReviewComment } = require(
-              require('path').join(
-                process.env.GITHUB_WORKSPACE,
-                'base/.github/scripts/humanizer_comment.cjs'
-              )
-            );
             const existing = findOwnedReviewComment(comments, marker);
             if (existing) {
               await github.rest.issues.updateComment({
