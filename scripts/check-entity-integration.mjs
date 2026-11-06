@@ -88,7 +88,7 @@ sourceRefs:
 ---
 Проба.
 `],
-  ['media/fixture-note/index.md',`---
+  ['media/fixture-note/index.mdx',`---
 title: Пробна белешка
 entity: media
 entityId: media:fixture-note
@@ -98,7 +98,14 @@ subjects:
 eventRefs:
   - event:fixture-conference
 ---
+import YouTube from '../../../../components/YouTube.astro';
+import EmbedFrame from '../../../../components/EmbedFrame.astro';
+
 Белешка без фотографије.
+
+<YouTube id="AAAAAAAAAAA" title="Пробни видео" />
+
+<EmbedFrame src="https://example.org/document.pdf" title="Пробни документ" />
 `],
   ['ru/people/fixture-actor/index.md',`---
 title: Фиктивная личность А
@@ -149,6 +156,10 @@ try {
   assert.equal(geojson.features.length,1);
   assert.equal(geojson.features[0].properties.eventUrl,'/events/fixture-conference/');
   assert.match(read('/events/map/'),/Измишљена конференција/);
+  const media = read('/media/fixture-note/');
+  assert.match(media,/youtube-nocookie\\.com\\/embed\\/AAAAAAAAAAA/);
+  assert.match(media,/youtube\\.com\\/watch\\?v=AAAAAAAAAAA/);
+  assert.match(media,/https:\/\/example\\.org\\/document\\.pdf/);
   console.log('Synthetic entity pages, auto sections, backlinks and global map: OK');
 } finally {
   for(const [relative] of docs) {
