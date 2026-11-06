@@ -270,13 +270,9 @@ def report(paths: list[str], base_root: Path, head_root: Path, ru_root: Path, sr
         if not after or after == before:
             continue
         if lang == "ru":
-            if len(CYRILLIC.findall(after)) < 25:
-                continue
             ru = ru or load_module(ru_root, "scripts/review.py", "svesnost_humanizer_ru")
             findings = russian_new(ru, before, after)
         else:
-            if len(CYRILLIC.findall(after)) < 25:
-                continue
             sr = sr or load_module(sr_root, "scripts/check.py", "svesnost_humanizer_sr")
             findings = serbian_new(sr, before, after)
         groups[lang].append((file, findings))
