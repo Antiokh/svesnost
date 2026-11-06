@@ -7,11 +7,15 @@ on:
       - 'agent/**'
     paths:
       - '.github/scripts/humanizer_review.py'
+      - '.github/scripts/test_humanizer_comment.cjs'
+      - '.github/scripts/humanizer_comment.cjs'
       - '.github/workflows/humanizer-*.yml'
       - 'docs/HUMANIZER_REVIEW.md'
   pull_request:
     paths:
       - '.github/scripts/humanizer_review.py'
+      - '.github/scripts/test_humanizer_comment.cjs'
+      - '.github/scripts/humanizer_comment.cjs'
       - '.github/workflows/humanizer-*.yml'
       - 'docs/HUMANIZER_REVIEW.md'
 
@@ -33,6 +37,8 @@ jobs:
         run: |
           python3 -m py_compile .github/scripts/humanizer_review.py
           python3 .github/scripts/humanizer_review.py --self-test
+      - name: Verify trusted comment selection
+        run: node .github/scripts/test_humanizer_comment.cjs
       - name: Fetch pinned language editors
         run: |
           git init /tmp/humanizer_russian
