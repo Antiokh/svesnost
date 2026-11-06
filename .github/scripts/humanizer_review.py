@@ -290,6 +290,122 @@ def mask_inline_dollar_math(chars: list[str]) -> None:
         else:
             pos += 1
 
+
+def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
+    """Find complete inline links/images, balancing destination parentheses.
+
+    Return (start, end, label_start, label_end, is_image) for valid spans.
+    The title may be quoted, so a ')' inside a title is not a link closer.
+    """
+    spans = []
+    pos = 0
+    while pos < len(text):
+        image = text.startswith("![", pos)
+        bracket = pos + 1 if image else pos
+        if (bracket >= len(text) or text[bracket] != "["
+                or is_markdown_escaped(text, bracket)):
+            pos += 1
+            continue
+        label_start = bracket + 1
+        cursor = label_start
+        nested = 1
+        while cursor < len(text) and text[cursor] != "\n":
+            if text[cursor] == "\\" and cursor + 1 < len(text):
+                cursor += 2
+                continue
+            if text[cursor] == "[":
+                nested += 1
+            elif text[cursor] == "]":
+                nested -= 1
+                if nested == 0:
+                    break
+            cursor += 1
+        if nested or cursor + 1 >= len(text) or text[cursor + 1] != "(":
+            pos += 1
+            continue
+        label_end = cursor
+        cursor += 2
+        parens = 1
+        title_quote = None
+        while cursor < len(text) and text[cursor] != "\n":
+            char = text[cursor]
+            if char == "\\" and cursor + 1 < len(text):
+                cursor += 2
+                continue
+            if title_quote:
+                if char == title_quote:
+                    title_quote = None
+            elif char in ("'", '"') and cursor > label_end + 2 and text[cursor - 1].isspace():
+                title_quote = char
+            elif char == "(":
+                parens += 1
+            elif char == ")":
+                parens -= 1
+                if parens == 0:
+                    spans.append((pos, cursor + 1, label_start, label_end, image))
+                    pos = cursor + 1
+                    break
+            cursor += 1
+        else:
+            pos += 1
+    return spans
+
+
+def mask_inline_link_targets(text: str, chars: list[str]) -> None:
+    """Keep visible link labels, mask the full balanced target and title."""
+    for start, end, label_start, label_end, image in markdown_inline_links(text):
+        if image:
+            hide(chars, start, end)
+        else:
+            hide(chars, start, label_start)
+            hide(chars, label_end, end)
+
+
+def mask_bare_urls(chars: list[str]) -> None:
+    """Mask bare URLs through balanced parentheses without swallowing prose."""
+    text = "".join(chars)
+    for match in re.finditer(r"https?://", text):
+        start = match.start()
+        end = match.end()
+        parens = 0
+        while end < len(text):
+            char = text[end]
+            if char.isspace() or char in '<>"' + "'[]":
+                break
+            if char == "(":
+                parens += 1
+            elif char == ")":
+                if parens == 0:
+                    break
+                parens -= 1
+            elif char == "\\" and end + 1 < len(text):
+                end += 2
+                continue
+            end += 1
+        hide(chars, start, end)
+
+
+def mask_inline_paren_math(chars: list[str]) -> None:
+    """Exclude balanced TeX \(...\), not escaped Markdown literal \\(."""
+    text = "".join(chars)
+    pos = 0
+    while True:
+        start = text.find(r"\(", pos)
+        if start < 0:
+            return
+        if is_markdown_escaped(text, start):
+            pos = start + 2
+            continue
+        close = text.find(r"\)", start + 2)
+        while close >= 0 and is_markdown_escaped(text, close):
+            close = text.find(r"\)", close + 2)
+        if close < 0:
+            pos = start + 2
+            continue
+        hide(chars, start, close + 2)
+        pos = close + 2
+
+
 def html_comment_scan_view(raw: str) -> str:
     """Shield comment openers within inline code, MDX expressions and JSX tags.
 
@@ -297,6 +413,11 @@ def html_comment_scan_view(raw: str) -> str:
     even if its contents happen to include backticks or other markup.
     """
     chars = list(raw)
+    # A Markdown link's destination and optional title are metadata. A literal
+    # <!-- in either cannot open an HTML comment or consume later paragraphs.
+    for _, end, _, label_end, _ in markdown_inline_links(raw):
+        for match in re.finditer(r"<!--", raw[label_end:end]):
+            hide(chars, label_end + match.start(), label_end + match.end())
     pos = 0
     while pos < len(raw):
         end = None
@@ -471,6 +592,9 @@ def prose_only(raw: str) -> str:
         offset += len(line)
 
     mask_gfm_tables(text, chars)
+    # Hide link targets before the HTML/MDX pass: a comment-looking title or
+    # expression inside a link must never be interpreted as real markup.
+    mask_inline_link_targets(text, chars)
 
     pos = 0
     while pos < len(text):
@@ -519,16 +643,8 @@ def prose_only(raw: str) -> str:
                 continue
         pos += 1
 
-    # Keep the visible link label, not its target/attributes. Footnote prose stays.
-    cleaned = "".join(chars)
-    for match in re.finditer(r"!?\[([^\]\n]*)\]\(([^)\n]*)\)", cleaned):
-        start, end = match.span()
-        if cleaned[start] == "!":
-            hide(chars, start, end)  # Image alt is not article prose.
-        else:
-            hide(chars, start, start + 1)
-            label_end = start + 1 + len(match.group(1))
-            hide(chars, label_end, end)
+    # Inline links/images were masked using balanced syntax before MDX parsing.
+    # Reference-style links are processed here; footnote prose stays.
     cleaned = "".join(chars)
     # Markdown reference links preserve their visible label, not [reference-id].
     # Images are not body prose, including reference-style image labels.
@@ -540,14 +656,12 @@ def prose_only(raw: str) -> str:
             hide(chars, start, start + 1)
             hide(chars, start + 1 + len(match.group(2)), end)
     cleaned = "".join(chars)
-    for match in re.finditer(r"https?://[^\s)>\]]+", cleaned):
-        hide(chars, *match.span())
+    mask_bare_urls(chars)
     for match in re.finditer(r"\[\^[^\]\n]+\](?=:?)", cleaned):
         hide(chars, *match.span())
     for match in re.finditer(r"(?m)^ {0,3}(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s+)", cleaned):
         hide(chars, *match.span())
-    for match in re.finditer(r"\\\([\s\S]*?\\\)", cleaned):
-        hide(chars, *match.span())
+    mask_inline_paren_math(chars)
 
     mask_inline_dollar_math(chars)
     cleaned = "".join(chars)
