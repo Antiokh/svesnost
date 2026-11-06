@@ -33,7 +33,8 @@ npm run build:data
 npm run build
 npm run test:i18n
 npm run test:model
-npm run test:integration  # синтетички подаци се уклањају и сайт се поново гради
+npm run test:integration  # синтетички подаци се уклањају и сајт се поново гради
+npm run test:dev          # провера измена без рестарта Astro dev сервера
 npx playwright install chromium  # само при првом локалном покретању
 npm run test:ui
 npm run preview
