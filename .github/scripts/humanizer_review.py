@@ -371,11 +371,12 @@ def serbian_all_evidence(module, finding, text: str) -> list[str]:
     sixth-and-later matches, so we use its very same compiled patterns on the
     same input. Keep this adapter aligned with the pinned upstream revision.
     """
-    normalized_text = module.normalize_script(text)
     if finding.rule_id == "sr_ai_negative_parallelism_density":
+        normalized_text = module.normalize_script(text)
         pattern = module.NEGATIVE_PARALLELISM_RE
         return [module._compact_ws(m.group(0)) for m in pattern.finditer(normalized_text)]
     if finding.rule_id == "sr_ai_triplet_density":
+        normalized_text = module.normalize_script(text)
         pattern = module.TRIPLET_RE
         return [module._compact_ws(m.group(0)) for m in pattern.finditer(normalized_text)]
     if finding.rule_id == "sr_ai_repeated_section_scaffold":
