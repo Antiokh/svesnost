@@ -309,7 +309,15 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
         label_start = bracket + 1
         cursor = label_start
         nested = 1
-        while cursor < len(text) and text[cursor] != "\n":
+        while cursor < len(text):
+            # Link labels may contain soft line breaks, but not blank lines
+            # (which would end the surrounding Markdown paragraph).
+            if text[cursor] == "\n" and (
+                cursor + 1 >= len(text)
+                or text[cursor + 1] == "\n"
+                or text[cursor + 1] == "\r"
+            ):
+                break
             if text[cursor] == "\\" and cursor + 1 < len(text):
                 cursor += 2
                 continue
@@ -671,6 +679,20 @@ def mask_raw_elements_before_blocks(text: str, chars: list[str]) -> None:
     # This shadow mask prevents a literal <pre> within fenced code from being
     # mistaken for an opening raw element.
     mask_fenced_blocks(text, view_chars)
+    # Raw-looking tags inside MDX expressions or ESM string/object content
+    # are JavaScript literals, not HTML. Shield them in this *view* only:
+    # real masks remain owned by prose_only's subsequent ESM/MDX passes.
+    expr_pos = 0
+    shadow = "".join(view_chars)
+    while expr_pos < len(text):
+        if (shadow[expr_pos] == "{" and not is_markdown_escaped(shadow, expr_pos)):
+            close = end_brace(shadow, expr_pos)
+            if close > expr_pos and shadow[close - 1] == "}":
+                hide(view_chars, expr_pos, close)
+                expr_pos = close
+                continue
+        expr_pos += 1
+    mask_mdx_esm(text, view_chars)
     view = "".join(view_chars)
     pos = 0
     while pos < len(text):
