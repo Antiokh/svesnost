@@ -1200,6 +1200,21 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
                         "СЕКРЕТ_ИМПОРТА", "module.js"):
         assert hidden_text not in modules_body, ("ESM leaked into prose", hidden_text, modules_body)
 
+    # An incomplete import in standalone/list-indented Markdown code cannot
+    # start module state and consume the paragraph after that code block.
+    for indented_source, visible_after in (
+        ("    import {\nВидимый читательский абзац.\n",
+         "Видимый читательский абзац."),
+        ("- Видимый пункт\n\n      import {\n"
+         "      СЕКРЕТ В INDENTED CODE\n"
+         "После списка видимая проза.\n",
+         "После списка видимая проза."),
+    ):
+        indented_prose = prose_only(indented_source)
+        assert visible_after in indented_prose, ("indented ESM swallowed prose", indented_prose)
+        assert "import" not in indented_prose, indented_prose
+        assert "СЕКРЕТ В INDENTED CODE" not in indented_prose, indented_prose
+
     # An unbalanced ESM-looking statement inside a fenced JS example must
     # not start top-level module handling or hide the paragraph after ~~~.
     fenced_esm = (
@@ -1368,6 +1383,43 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         assert expected in nested_table_result, (expected, nested_table_result)
     for hidden in ("ВНУТРЕННИЕ ДАННЫЕ", "СЕКРЕТ ВНЕ ВНУТРЕННЕЙ ТАБЛИЦЫ"):
         assert hidden not in nested_table_result, (hidden, nested_table_result)
+
+    # A raw-looking tag in standalone Markdown code is not a raw element.
+    # The later non-indented prose must remain visible.
+    for code_tag in ("pre", "table", "CodeBlock"):
+        standalone_code = (
+            f"    <{code_tag}>\n"
+            "Обычный читательский абзац после примера.\n"
+        )
+        extracted = prose_only(standalone_code)
+        assert "Обычный читательский абзац после примера." in extracted, (
+            "indented raw tag swallowed prose", code_tag, extracted
+        )
+
+    # An escaped HTML tag is visible text, including a literal <table>.
+    for escape_prefix in ("\\", "\\\\\\"):
+        literal_tag = (
+            "Буквально " + escape_prefix + "<table> означает имя тега.\n"
+            "Видимый абзац после литерала.\n"
+        )
+        extracted = prose_only(literal_tag)
+        assert "означает имя тега" in extracted, extracted
+        assert "Видимый абзац после литерала" in extracted, extracted
+
+    # A closing table tag inside an HTML comment does not terminate the
+    # outer table; contents after the comment remain hidden as table data.
+    table_with_comment = (
+        "Проза перед таблицей.\n"
+        "<table><tr><td>\n"
+        "<!-- </table> -->\n"
+        "СЕКРЕТ ВНУТРИ ЯЧЕЙКИ\n"
+        "</td></tr></table>\n"
+        "Видимый абзац после таблицы.\n"
+    )
+    extracted = prose_only(table_with_comment)
+    assert "Проза перед таблицей" in extracted, extracted
+    assert "Видимый абзац после таблицы" in extracted, extracted
+    assert "СЕКРЕТ ВНУТРИ ЯЧЕЙКИ" not in extracted, extracted
 
     # Escaped Markdown delimiters remain readable: neither \{ nor \<!--
     # may start an MDX expression or HTML comment that eats later paragraphs.
