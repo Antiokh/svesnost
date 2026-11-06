@@ -277,6 +277,37 @@ def mask_inline_dollar_math(chars: list[str]) -> None:
         else:
             pos += 1
 
+def html_comment_scan_view(raw: str) -> str:
+    """Shield comment openers within inline code, MDX expressions and JSX tags.
+
+    Only the opener is shielded: a real HTML comment can still close at -->
+    even if its contents happen to include backticks or other markup.
+    """
+    chars = list(raw)
+    pos = 0
+    while pos < len(raw):
+        end = None
+        if raw[pos] == chr(96):
+            run = len(raw[pos:]) - len(raw[pos:].lstrip(chr(96)))
+            token = chr(96) * run
+            close = raw.find(token, pos + run)
+            if close >= 0:
+                end = close + run
+        elif raw[pos] == "{":
+            end = end_brace(raw, pos)
+        elif raw[pos] == "<" and not raw.startswith("<!--", pos):
+            match = re.match(r"</?([A-Za-z][\w.:-]*)(?=[\s/>])", raw[pos:])
+            if match or raw.startswith(("<>", "</>"), pos):
+                end = end_tag(raw, pos)
+        if end is not None and end > pos:
+            for match in re.finditer(r"<!--", raw[pos:end]):
+                hide(chars, pos + match.start(), pos + match.end())
+            pos = end
+        else:
+            pos += 1
+    return "".join(chars)
+
+
 def mask_html_comments_in_line(
     line: str, chars: list[str], offset: int, in_comment: bool
 ) -> tuple[str, bool]:
@@ -311,15 +342,20 @@ def prose_only(raw: str) -> str:
     list_indents: list[tuple[int, int]] = []
     after_blank = False
     in_html_comment = False
+    in_footnote = False
+    comment_lines = iter(html_comment_scan_view(text).splitlines(keepends=True))
 
     for original_line in text.splitlines(keepends=True):
-        # HTML comments must be hidden before interpreting Markdown. Never
-        # start or finish an HTML comment inside an already-open code fence.
+        # Shield inline code/MDX attributes when searching for HTML comments;
+        # preserve the original source for all subsequent Markdown work.
+        comment_line = next(comment_lines)
         line = original_line
         if not in_fence and not in_math:
-            line, in_html_comment = mask_html_comments_in_line(
-                original_line, chars, offset, in_html_comment
+            scanned, in_html_comment = mask_html_comments_in_line(
+                comment_line, chars, offset, in_html_comment
             )
+            if scanned != comment_line:
+                line = scanned
         trimmed = line.lstrip()
         indent = len(line) - len(trimmed)
         visible, quote_depth = _unquote_line(line)
@@ -328,9 +364,20 @@ def prose_only(raw: str) -> str:
         # Leave code-fence contents and mathematical blocks to their own
         # state machines, without updating the surrounding list context.
         if not in_fence and not in_math and not in_html_comment:
+            footnote_marker = re.match(r"^ {0,3}\[\^[^\]\n]+\]:[ \t]*", line)
+            if footnote_marker:
+                in_footnote = True
+            elif trimmed.strip() and indent < 4:
+                in_footnote = False
             list_marker = re.match(r"^( *)(?:[-*+]|\d+[.)])\s+", line)
             if not trimmed.strip():
                 after_blank = bool(list_indents)
+            elif footnote_marker:
+                after_blank = False
+            elif in_footnote and indent >= 4 and indent < 8:
+                # A four-space continuation belongs to the visible footnote,
+                # not to an independent indented code block.
+                after_blank = False
             elif list_marker:
                 if indent >= 4 and not list_indents:
                     hide(chars, offset, offset + len(line))
