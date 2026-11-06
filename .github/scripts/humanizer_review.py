@@ -1454,6 +1454,17 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "Документ" in prose_only("До [Документ](<b)c>) после.")
     assert "Материал" in prose_only("До [Материал](<path_(foo)more>) после.")
 
+    # Malformed CommonMark must remain visible: whitespace after a bare
+    # destination requires an explicit quoted/parenthesized title.
+    malformed_link = "Видимый [пример](/служебный/путь СЛОВА ДЛЯ РЕДАКТУРЫ) после."
+    malformed_result = prose_only(malformed_link)
+    assert "СЛОВА ДЛЯ РЕДАКТУРЫ" in malformed_result, malformed_result
+    assert "пример" in malformed_result and "после" in malformed_result, malformed_result
+    assert not markdown_inline_links(malformed_link)
+    assert "СЛОВА ДЛЯ РЕДАКТУРЫ" not in prose_only(
+        'Видимый [пример](/служебный/путь "СЛОВА ДЛЯ РЕДАКТУРЫ") после.'
+    )
+
     # An escaped Markdown literal \\( is not a TeX opener. It must not pair
     # with the closing delimiter of a later, real inline formula.
     quoted_tex = r"До \\( буквально. Важная проза после литерала. \(x+1\) Конец."
@@ -1772,6 +1783,19 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         assert visible in extracted, ("JS pseudo-tag ate prose", sample, extracted)
         assert "<table>" not in extracted and "<pre>" not in extracted, extracted
 
+    # Curly braces inside JS regex character classes are not MDX delimiters.
+    for expression in (
+        r"/[{]/.test('x') ? 'да' : 'нет'",
+        r"/[}]/.test('x') ? 'да' : 'нет'",
+    ):
+        sample = "До {" + expression + "} после выражения.\nСледующий читательский абзац."
+        extracted = prose_only(sample)
+        for visible in ("До", "после выражения", "Следующий читательский абзац"):
+            assert visible in extracted, ("regex swallowed reader prose", expression, extracted)
+        for hidden in ("test(", "'да'", "'нет'"):
+            assert hidden not in extracted, ("regex leaked JS", expression, extracted)
+    assert "Деление рядом" in prose_only("Деление рядом {12 / 3} и затем проза.")
+
     # The literal <!-- inside inline code, an MDX attribute or a JS expression
     # cannot open an HTML comment and consume following reader-visible text.
     fake_openers = (
@@ -1912,6 +1936,20 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     heading_result = prose_only(table_then_heading)
     assert "ДАННЫЕ БЕЗ PIPES" not in heading_result, heading_result
     assert "Видимый заголовок после таблицы" in heading_result, heading_result
+
+    # An inline HTML tag at the beginning of a GFM row is still a table
+    # cell, and must not terminate the table as a new HTML block.
+    inline_html_gfm = (
+        "| Участник | Сумма |\n"
+        "| --- | --- |\n"
+        "<em>ТАБЛИЧНЫЕ ДАННЫЕ</em> | 500\n"
+        "\n"
+        "Видимый абзац.\n"
+    )
+    inline_html_result = prose_only(inline_html_gfm)
+    assert "ТАБЛИЧНЫЕ ДАННЫЕ" not in inline_html_result, inline_html_result
+    assert "500" not in inline_html_result, inline_html_result
+    assert "Видимый абзац." in inline_html_result, inline_html_result
 
     # Pipes inside Markdown code spans and escaped pipes are not table columns.
     ticks = chr(96)
