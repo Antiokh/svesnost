@@ -3,15 +3,21 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
     "test:i18n": "node scripts/check-i18n.mjs",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "test:ui": "playwright test"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.42.4",
     "astro": "^7.3.4"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
   }
 }

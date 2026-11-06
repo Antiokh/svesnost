@@ -13,11 +13,16 @@ for (const [url, lang] of [['/', 'sr'], ['/ru/', 'ru'], ['/en/', 'en']]) {
   const html = read(url);
   assert.match(html, new RegExp('<html[^>]+lang="' + lang + '"'), url + ' wrong html language');
   assert.ok(html.includes('data-pagefind-body'), url + ' should be indexed');
+  assert.ok(html.includes('data-sves-mobile-toolbar'), url + ' splash must provide mobile controls');
+  assert.ok(html.includes('data-sves-language-mobile'), url + ' lacks mobile language switch');
+  assert.ok(html.includes('data-sves-theme-mobile'), url + ' lacks mobile theme switch');
 }
 for (const lang of ['sr', 'ru', 'en']) {
   const prefix = lang === 'sr' ? '' : '/' + lang;
   const html = read(prefix + '/materials/');
   assert.match(html, new RegExp('<html[^>]+lang="' + lang + '"'));
+  assert.ok(html.includes('data-sves-language-mobile'), prefix + '/materials/ lacks menu language control');
+  assert.ok(html.includes('data-sves-theme-mobile'), prefix + '/materials/ lacks menu theme control');
 }
 
 const original = read('/materials/izvori/');
@@ -33,5 +38,8 @@ for (const lang of ['ru', 'en']) {
   const listing = read('/' + lang + '/materials/');
   assert.ok(!listing.includes('href="' + url + '"'), url + ' leaked into localized menu');
 }
+const policy = read('/editorial-policy/');
+assert.ok(policy.includes('data-panel-toggle="sidebar"'), 'Article lacks desktop sidebar control');
+assert.ok(policy.includes('data-panel-toggle="toc"'), 'Article lacks desktop ToC control');
 assert.ok(existsSync(path.join(root, 'pagefind')), 'Missing Pagefind index');
 console.log('Language routing, navigation and search exclusions: OK');
