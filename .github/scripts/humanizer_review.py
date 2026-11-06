@@ -745,6 +745,7 @@ def mask_fenced_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None
     """
     offset = 0
     in_fence = None
+    in_math = None
     in_comment = False
     list_indents: list[tuple[int, int]] = []
     # Comments are masked before code fences, but markers inside an already
@@ -770,10 +771,12 @@ def mask_fenced_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None
                 list_indents.clear()
         fence_text, quote_depth = _fence_line(line, list_indents)
         fence = FENCE.match(fence_text)
-        # An unclosed fence nested in a blockquote ends with that quote;
-        # it must not mask the following unquoted article paragraph.
+        math_text = fence_text.lstrip()
+        # A quote boundary ends an unfinished quoted code/math block.
         if in_fence and quote_depth < in_fence[2]:
             in_fence = None
+        if in_math and quote_depth < in_math[1]:
+            in_math = None
         if in_fence:
             hide(chars, offset, offset + len(line))
             if (quote_depth == in_fence[2] and fence
@@ -781,6 +784,15 @@ def mask_fenced_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None
                     and len(fence.group(1)) >= in_fence[1]
                     and not fence_text[fence.end():].strip()):
                 in_fence = None
+        elif in_math:
+            hide(chars, offset, offset + len(line))
+            if quote_depth == in_math[1] and in_math[0] in math_text:
+                in_math = None
+        elif not in_comment and math_text.startswith((chr(36) * 2, r"\[")):
+            closing = chr(36) * 2 if math_text.startswith(chr(36) * 2) else r"\]"
+            hide(chars, offset, offset + len(line))
+            if closing not in math_text[2:]:
+                in_math = (closing, quote_depth)
         elif not in_comment and fence:
             token = fence.group(1)
             in_fence = (token[0], len(token), quote_depth)
@@ -1470,6 +1482,23 @@ def inline(value: object, limit: int = 230) -> str:
     return s[: limit - 1] + "…" if len(s) > limit else s
 
 
+def limit_report_size(text: str, limit_bytes: int = 60000) -> str:
+    """Keep PR comments and Actions summaries within safe byte limits."""
+    if len(text.encode("utf-8")) <= limit_bytes:
+        return text
+    notice = "\n_Отчёт сокращён по ограничению размера; часть замечаний не показана._\n"
+    budget = limit_bytes - len(notice.encode("utf-8")) - 2
+    output: list[str] = []
+    used = 0
+    for line in text.splitlines(keepends=True):
+        size = len(line.encode("utf-8"))
+        if used + size > budget:
+            break
+        output.append(line)
+        used += size
+    return "".join(output).rstrip() + notice
+
+
 def report(paths: list[str | dict[str, str]], base_root: Path, head_root: Path,
            ru_root: Path, sr_root: Path) -> str:
     groups: dict[str, list[tuple[str, list[dict]]]] = {"ru": [], "sr": []}
@@ -1524,7 +1553,7 @@ def report(paths: list[str | dict[str, str]], base_root: Path, head_root: Path,
             if len(findings) > 25:
                 lines += ["", f"_Ещё {len(findings)-25} замечаний не показано._"]
             lines.append("")
-    return "\n".join(lines).rstrip() + "\n"
+    return limit_report_size("\n".join(lines).rstrip() + "\n")
 
 
 def self_test() -> dict:
