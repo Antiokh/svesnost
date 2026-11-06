@@ -1,0 +1,131 @@
+name: Контракт Humanizer
+
+on:
+  push:
+    branches:
+      - main
+      - 'agent/**'
+    paths:
+      - '.github/scripts/humanizer_review.py'
+      - '.github/scripts/test_humanizer_comment.cjs'
+      - '.github/scripts/humanizer_comment.cjs'
+      - '.github/workflows/humanizer-*.yml'
+      - 'docs/HUMANIZER_REVIEW.md'
+  pull_request:
+    paths:
+      - '.github/scripts/humanizer_review.py'
+      - '.github/scripts/test_humanizer_comment.cjs'
+      - '.github/scripts/humanizer_comment.cjs'
+      - '.github/workflows/humanizer-*.yml'
+      - 'docs/HUMANIZER_REVIEW.md'
+
+permissions:
+  contents: read
+
+env:
+  HUMANIZER_RUSSIAN_SHA: 81af17bcb18ae9364a9f94f4e2f849a68d3b1eee
+  HUMANIZER_SERBIAN_SHA: ebf49b929f4f6c75b2e7e5a8814ff0f17a4f46ab
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Test syntax and prose-only adapter
+        run: |
+          python3 -m py_compile .github/scripts/humanizer_review.py
+          python3 .github/scripts/humanizer_review.py --self-test
+      - name: Verify trusted comment selection
+        run: node .github/scripts/test_humanizer_comment.cjs
+      - name: Fetch pinned language editors
+        run: |
+          git init /tmp/humanizer_russian
+          git -C /tmp/humanizer_russian remote add origin https://github.com/Antiokh/humanizer_russian.git
+          git -C /tmp/humanizer_russian fetch --depth=1 origin "$HUMANIZER_RUSSIAN_SHA"
+          git -C /tmp/humanizer_russian checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/humanizer_russian rev-parse HEAD)" = "$HUMANIZER_RUSSIAN_SHA"
+          git init /tmp/humanizer_serbian
+          git -C /tmp/humanizer_serbian remote add origin https://github.com/Antiokh/humanizer_serbian.git
+          git -C /tmp/humanizer_serbian fetch --depth=1 origin "$HUMANIZER_SERBIAN_SHA"
+          git -C /tmp/humanizer_serbian checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/humanizer_serbian rev-parse HEAD)" = "$HUMANIZER_SERBIAN_SHA"
+      - name: Test both reviewer APIs
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          spec = importlib.util.spec_from_file_location("svesnost_review", ".github/scripts/humanizer_review.py")
+          adapter = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(adapter)
+          ru = adapter.load_module(Path("/tmp/humanizer_russian"), "scripts/review.py", "humanizer_ru_contract")
+          report = ru.run_review("Здесь обычное проверочное предложение на русском языке.", style_id="neutral", evidence_ids=None, register="general")
+          assert isinstance(report["findings"], list)
+          sr = adapter.load_module(Path("/tmp/humanizer_serbian"), "scripts/check.py", "humanizer_sr_contract")
+          assert isinstance(sr.review("Ово је обичан проверни текст на српском језику."), list)
+          assert isinstance(adapter.russian_new(ru, "", "Здесь другое короткое предложение."), list)
+          assert isinstance(adapter.serbian_new(sr, "", "Ово је још једна проверна реченица."), list)
+
+          # The pinned Serbian checker exposes only five preview examples, but
+          # full evidence must detect changes beyond that preview.
+          scenarios = [
+              (
+                  "sr_ai_triplet_density",
+                  [f"Јабука{i}, крушка{i} и шљива{i}." for i in range(6)],
+                  "Малина99, јагода99 и боровница99.",
+                  "Malina99",
+              ),
+              (
+                  "sr_ai_negative_parallelism_density",
+                  [f"Није исход{i} већ резултат{i}." for i in range(6)],
+                  "Није избор99 већ одлука99.",
+                  "izbor99",
+              ),
+          ]
+          for rule_id, rows, changed, needle in scenarios:
+              original = "\n".join(rows)
+              updated = "\n".join([*rows[:5], changed])
+              previous = next(item for item in sr.review(original) if item.rule_id == rule_id)
+              current = next(item for item in sr.review(updated) if item.rule_id == rule_id)
+              assert previous.count == current.count == 6
+              assert len(previous.evidence) == len(current.evidence) == 5
+              assert previous.evidence == current.evidence
+              changes = [item for item in adapter.serbian_new(sr, original, updated) if item["rule_id"] == rule_id]
+              assert len(changes) == 1, (rule_id, changes)
+              assert changes[0]["count"] == 1, changes
+              assert any(needle.casefold() in item.casefold() for item in changes[0]["evidence"]), changes
+              assert not [item for item in adapter.serbian_new(sr, original, original) if item["rule_id"] == rule_id]
+          print("Pinned Serbian reviewer: sixth-and-later replacement detection OK")
+          print("Language editor APIs: OK")
+          PY
+
+      - name: Verify an end-to-end PR review on sample articles
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          from tempfile import TemporaryDirectory
+          spec = importlib.util.spec_from_file_location("svesnost_review_sample", ".github/scripts/humanizer_review.py")
+          adapter = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(adapter)
+          with TemporaryDirectory() as folder:
+              base = Path(folder) / "base"
+              head = Path(folder) / "head"
+              ru = "src/content/docs/ru/materials/example.md"
+              sr = "src/content/docs/materials/example.md"
+              en = "src/content/docs/en/materials/example.md"
+              for key in (ru, sr, en):
+                  (head / key).parent.mkdir(parents=True, exist_ok=True)
+              (head / ru).write_text("---\ntitle: Служебный заголовок\n---\nЭто новая русская статья с небольшим текстом для редакторской проверки.\n", encoding="utf-8")
+              (head / sr).write_text("---\ntitle: Службени наслов\n---\nОво је нови чланак на српској ћирилици који је припремљен за уредничку проверу.\n", encoding="utf-8")
+              (head / en).write_text("---\ntitle: English\n---\nEnglish contents should never be reviewed.\n", encoding="utf-8")
+              summary = adapter.report([ru, sr, en], base, head,
+                                       Path("/tmp/humanizer_russian"),
+                                       Path("/tmp/humanizer_serbian"))
+              assert adapter.MARKER in summary
+              assert ru in summary and sr in summary
+              assert en not in summary
+              assert "Служебный заголовок" not in adapter.prose_only((head / ru).read_text(encoding="utf-8"))
+              print("Two-language editorial PR review: OK")
+          PY
