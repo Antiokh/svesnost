@@ -62,3 +62,33 @@ jobs:
           assert isinstance(adapter.serbian_new(sr, "", "Ово је још једна проверна реченица."), list)
           print("Language editor APIs: OK")
           PY
+
+      - name: Verify an end-to-end PR review on sample articles
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          from tempfile import TemporaryDirectory
+          spec = importlib.util.spec_from_file_location("svesnost_review_sample", ".github/scripts/humanizer_review.py")
+          adapter = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(adapter)
+          with TemporaryDirectory() as folder:
+              base = Path(folder) / "base"
+              head = Path(folder) / "head"
+              ru = "src/content/docs/ru/materials/example.md"
+              sr = "src/content/docs/materials/example.md"
+              en = "src/content/docs/en/materials/example.md"
+              for key in (ru, sr, en):
+                  (head / key).parent.mkdir(parents=True, exist_ok=True)
+              (head / ru).write_text("---\ntitle: Служебный заголовок\n---\nЭто новая русская статья с небольшим текстом для редакторской проверки.\n", encoding="utf-8")
+              (head / sr).write_text("---\ntitle: Службени наслов\n---\nОво је нови чланак на српској ћирилици који је припремљен за уредничку проверу.\n", encoding="utf-8")
+              (head / en).write_text("---\ntitle: English\n---\nEnglish contents should never be reviewed.\n", encoding="utf-8")
+              summary = adapter.report([ru, sr, en], base, head,
+                                       Path("/tmp/humanizer_russian"),
+                                       Path("/tmp/humanizer_serbian"))
+              assert adapter.MARKER in summary
+              assert ru in summary and sr in summary
+              assert en not in summary
+              assert "Служебный заголовок" not in adapter.prose_only((head / ru).read_text(encoding="utf-8"))
+              print("Two-language editorial PR review: OK")
+          PY
