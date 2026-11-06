@@ -359,6 +359,7 @@ def prose_only(raw: str) -> str:
     in_fence = None
     in_math = None
     list_indents: list[tuple[int, int]] = []
+    list_code_indent: int | None = None
     after_blank = False
     in_html_comment = False
     in_footnote = False
@@ -382,7 +383,16 @@ def prose_only(raw: str) -> str:
         # Code inside a blockquote uses the indentation AFTER the > marker.
         # Leave code-fence contents and mathematical blocks to their own
         # state machines, without updating the surrounding list context.
-        if not in_fence and not in_math and not in_html_comment:
+        # A list's indented code block continues over successive lines and
+        # blank lines until a nonblank line dedents below its code threshold.
+        list_code_line = False
+        if list_code_indent is not None:
+            if not trimmed.strip() or indent >= list_code_indent:
+                list_code_line = True
+                hide(chars, offset, offset + len(line))
+            else:
+                list_code_indent = None
+        if not in_fence and not in_math and not in_html_comment and not list_code_line:
             footnote_marker = re.match(r"^ {0,3}\[\^[^\]\n]+\]:[ \t]*", line)
             if footnote_marker:
                 in_footnote = True
@@ -409,8 +419,11 @@ def prose_only(raw: str) -> str:
                 hide(chars, offset, offset + len(line))
                 after_blank = False
             elif indent >= 4:
-                if (not list_indents or
-                        (after_blank and indent >= list_indents[-1][1] + 4)):
+                if not list_indents:
+                    hide(chars, offset, offset + len(line))
+                elif after_blank and indent >= list_indents[-1][1] + 4:
+                    list_code_indent = list_indents[-1][1] + 4
+                    list_code_line = True
                     hide(chars, offset, offset + len(line))
                 after_blank = False
             else:
@@ -437,6 +450,9 @@ def prose_only(raw: str) -> str:
             # A comment can contain fence or math delimiters on their own
             # lines; neither may change parser state.
             pass
+        elif list_code_line:
+            # Fences and math markers inside indented code are code, too.
+            hide(chars, offset, offset + len(line))
         elif fence:
             marker = fence.group(1)
             in_fence = (marker[0], len(marker), quote_depth)
