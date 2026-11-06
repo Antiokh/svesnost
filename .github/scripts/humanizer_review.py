@@ -1126,6 +1126,23 @@ def mask_html_comments_in_line(
     return "".join(masked), in_comment
 
 
+def mask_markdown_line_prefixes(chars: list[str]) -> None:
+    """Remove nested quote, heading and list markers without losing words."""
+    offset = 0
+    for line in "".join(chars).splitlines(keepends=True):
+        visible, depth = _unquote_line(line)
+        prefix = len(line.rstrip("\r\n")) - len(visible) if depth else 0
+        if prefix:
+            hide(chars, offset, offset + prefix)
+        marker = re.match(
+            r"^ {0,6}(?:#{1,6}[ \t]+|[-*+][ \t]+|\d+[.)][ \t]+)",
+            visible
+        )
+        if marker:
+            hide(chars, offset + prefix, offset + prefix + marker.end())
+        offset += len(line)
+
+
 def prose_only(raw: str, *, is_mdx: bool = True) -> str:
     text = body_without_frontmatter(raw)
     chars = list(text)
@@ -1333,8 +1350,7 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
     mask_bare_urls(chars)
     for match in re.finditer(r"\[\^[^\]\n]+\](?=:?)", cleaned):
         hide(chars, *match.span())
-    for match in re.finditer(r"(?m)^ {0,3}(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s+)", cleaned):
-        hide(chars, *match.span())
+    mask_markdown_line_prefixes(chars)
     mask_inline_paren_math(chars)
 
     mask_inline_dollar_math(chars)
