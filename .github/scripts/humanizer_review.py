@@ -1116,6 +1116,27 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
                         "СЕКРЕТ_ИМПОРТА", "module.js"):
         assert hidden_text not in modules_body, ("ESM leaked into prose", hidden_text, modules_body)
 
+    # An unbalanced ESM-looking statement inside a fenced JS example must
+    # not start top-level module handling or hide the paragraph after ~~~.
+    fenced_esm = (
+        "Проза до примера.\n"
+        "~~~js\n"
+        "import {\n"
+        "~~~\n"
+        "Видимый абзац после примера.\n"
+    )
+    fenced_esm_prose = prose_only(fenced_esm)
+    assert "Проза до примера" in fenced_esm_prose, fenced_esm_prose
+    assert "Видимый абзац после примера" in fenced_esm_prose, fenced_esm_prose
+    assert "import" not in fenced_esm_prose, fenced_esm_prose
+    quoted_esm = (
+        "> ~~~js\n"
+        "> export const config = {\n"
+        "> ~~~\n"
+        "Видимый текст после цитаты.\n"
+    )
+    assert "Видимый текст после цитаты" in prose_only(quoted_esm)
+
     # Indented YAML block scalar delimiters are data, not closing frontmatter.
     # Only a column-zero delimiter ends the metadata section.
     for closing in ("---", "..."):
@@ -1235,6 +1256,34 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         "Текст после кода.\n"
     )
     assert "Текст после кода." in prose_only(fenced_raw_literal)
+
+    # The raw-element pre-scanner must also recognize a fence indented under
+    # a Markdown list: <pre> is code text, not a real opening container.
+    nested_fenced_raw = (
+        "- Видимый пункт\n"
+        "    ~~~html\n"
+        "    <pre>\n"
+        "    ~~~\n"
+        "Обычный абзац после списка.\n"
+    )
+    nested_fenced_raw_prose = prose_only(nested_fenced_raw)
+    assert "Видимый пункт" in nested_fenced_raw_prose, nested_fenced_raw_prose
+    assert "Обычный абзац после списка" in nested_fenced_raw_prose, nested_fenced_raw_prose
+
+    # The outer HTML/MDX table remains hidden even after an inner </table>.
+    nested_table = (
+        "Проза до вложенной таблицы.\n"
+        "<table><tr><td>\n"
+        "  <table><tr><td>ВНУТРЕННИЕ ДАННЫЕ</td></tr></table>\n"
+        "  СЕКРЕТ ВНЕ ВНУТРЕННЕЙ ТАБЛИЦЫ\n"
+        "</td></tr></table>\n"
+        "Видимый абзац после таблицы.\n"
+    )
+    nested_table_result = prose_only(nested_table)
+    for expected in ("Проза до вложенной таблицы", "Видимый абзац после таблицы"):
+        assert expected in nested_table_result, (expected, nested_table_result)
+    for hidden in ("ВНУТРЕННИЕ ДАННЫЕ", "СЕКРЕТ ВНЕ ВНУТРЕННЕЙ ТАБЛИЦЫ"):
+        assert hidden not in nested_table_result, (hidden, nested_table_result)
 
     # Escaped Markdown delimiters remain readable: neither \{ nor \<!--
     # may start an MDX expression or HTML comment that eats later paragraphs.
