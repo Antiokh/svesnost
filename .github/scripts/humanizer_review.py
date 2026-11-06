@@ -408,6 +408,120 @@ def mask_inline_paren_math(chars: list[str]) -> None:
         pos = close + 2
 
 
+
+def mask_mdx_esm(text: str, chars: list[str]) -> None:
+    """Exclude whole top-level import/export declarations, including newlines.
+
+    This is a conservative JS lexical boundary scan rather than an MDX AST:
+    quoted strings, comments and balanced {}, [] and () cannot end a module
+    declaration. Once balanced, the declaration ends at its line boundary.
+    """
+    active = False
+    stack: list[str] = []
+    quote = ""
+    block_comment = False
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        if not active:
+            if not MODULE.match(line):
+                offset += len(line)
+                continue
+            active = True
+        hide(chars, offset, offset + len(line))
+        i = 0
+        while i < len(line):
+            char = line[i]
+            if block_comment:
+                if line.startswith("*/", i):
+                    block_comment = False
+                    i += 2
+                    continue
+            elif quote:
+                if char == "\\" and i + 1 < len(line):
+                    i += 2
+                    continue
+                if char == quote:
+                    quote = ""
+            elif line.startswith("//", i):
+                break
+            elif line.startswith("/*", i):
+                block_comment = True
+                i += 2
+                continue
+            elif char in ("'", '"', chr(96)):
+                quote = char
+            elif char in "([{":
+                stack.append({"(": ")", "[": "]", "{": "}"}[char])
+            elif char in ")]}" and stack and char == stack[-1]:
+                stack.pop()
+            i += 1
+        trimmed = line.rstrip()
+        continued = (trimmed.endswith(("=", "=>", ",", ".", "\\", "(", "[", "{"))
+                     or bool(re.search(r"\b(?:from|as|default)\s*$", trimmed)))
+        if not stack and not quote and not block_comment and not continued:
+            active = False
+        offset += len(line)
+
+
+def mask_raw_elements_before_blocks(text: str, chars: list[str]) -> None:
+    """Hide raw HTML/JSX code and table containers before Markdown blocks.
+
+    A shadow view protects fenced code, inline code, comments and link targets
+    from being mistaken for raw element openers. All offsets remain unchanged.
+    """
+    view_chars = list("".join(chars))
+    mask_inline_link_targets(text, view_chars)
+    # A raw-looking tag written inside ordinary fenced code is just code.
+    offset = 0
+    fence = None
+    for line in text.splitlines(keepends=True):
+        visible, depth = _unquote_line(line)
+        marker = FENCE.match(visible)
+        if fence:
+            hide(view_chars, offset, offset + len(line))
+            if (depth == fence[2] and marker
+                    and marker.group(1)[0] == fence[0]
+                    and len(marker.group(1)) >= fence[1]
+                    and not visible[marker.end():].strip()):
+                fence = None
+        elif marker:
+            token = marker.group(1)
+            fence = (token[0], len(token), depth)
+            hide(view_chars, offset, offset + len(line))
+        offset += len(line)
+    view = "".join(view_chars)
+    pos = 0
+    while pos < len(text):
+        if view[pos] == chr(96):
+            run = len(view[pos:]) - len(view[pos:].lstrip(chr(96)))
+            token = chr(96) * run
+            close = view.find(token, pos + run)
+            if close >= 0:
+                pos = close + run
+                continue
+        if view.startswith("<!--", pos) and not is_markdown_escaped(view, pos):
+            close = view.find("-->", pos + 4)
+            pos = len(view) if close < 0 else close + 3
+            continue
+        if view[pos] != "<" or is_markdown_escaped(view, pos):
+            pos += 1
+            continue
+        match = re.match(r"</?([A-Za-z][\w.:-]*)(?=[\s/>])", view[pos:])
+        if not match:
+            pos += 1
+            continue
+        tag = match.group(1)
+        end = end_tag(text, pos)
+        if (tag.lower() in RAW_ELEMENTS and not view.startswith("</", pos)
+                and not text[pos:end].rstrip().endswith("/>")):
+            close = re.search(r"</" + re.escape(tag) + r"\s*>", text[end:], re.I)
+            stop = end + close.end() if close else len(text)
+            hide(chars, pos, stop)
+            pos = stop
+        else:
+            pos = end
+
+
 def html_comment_scan_view(raw: str) -> str:
     """Shield comment openers within inline code, MDX expressions and JSX tags.
 
@@ -478,6 +592,12 @@ def mask_html_comments_in_line(
 def prose_only(raw: str) -> str:
     text = body_without_frontmatter(raw)
     chars = list(text)
+    # Exclude complete ESM declarations and raw-code containers before
+    # interpreting Markdown fences/math/comments, so code cannot alter the
+    # state of the reader-visible block scanner.
+    mask_mdx_esm(text, chars)
+    mask_raw_elements_before_blocks(text, chars)
+    block_text = "".join(chars)
     offset = 0
     in_fence = None
     in_math = None
@@ -486,9 +606,9 @@ def prose_only(raw: str) -> str:
     after_blank = False
     in_html_comment = False
     in_footnote = False
-    comment_lines = iter(html_comment_scan_view(text).splitlines(keepends=True))
+    comment_lines = iter(html_comment_scan_view(block_text).splitlines(keepends=True))
 
-    for original_line in text.splitlines(keepends=True):
+    for original_line in block_text.splitlines(keepends=True):
         # Shield inline code/MDX attributes when searching for HTML comments;
         # preserve the original source for all subsequent Markdown work.
         comment_line = next(comment_lines)
