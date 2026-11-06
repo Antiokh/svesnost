@@ -1695,6 +1695,16 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         assert hidden not in soft_link_prose, ("multiline label leaked metadata", hidden, soft_link_prose)
     assert len(markdown_inline_links(soft_break_link)) == 1
 
+    # Unclosed link destinations must not repeatedly rescan the remaining
+    # input. Bracket matching alone does not cover '[a](' repetitions.
+    unfinished_targets = "[a](" * 10000
+    assert markdown_inline_links(unfinished_targets) == []
+    with_later_link = unfinished_targets + " Далее [Документ](/page)."
+    found_links = markdown_inline_links(with_later_link)
+    assert len(found_links) == 1, ("malformed targets hid a real link", found_links)
+    assert "Документ" in prose_only(with_later_link)
+    assert "/page" not in prose_only(with_later_link)
+
     # An angle-bracket link destination may contain a literal unmatched ).
     # The complete destination including the technical tail must be hidden.
     for angle_link in (
@@ -2123,6 +2133,34 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         assert item in shortcut_text, ("reference shortcut lost prose", item, shortcut_text)
     for item in ("СЕКРЕТНЫЙ ALT", "/img.png"):
         assert item not in shortcut_text, ("reference shortcut leaked metadata", item, shortcut_text)
+
+    # Escaping the image marker changes ![label] into a literal '!' and a
+    # visible reference link. The unescaped image still hides its alt text.
+    shortcut_escaped = (
+        "\\![Документ]\n"
+        "\n"
+        "[Документ]: /private/path\n"
+    )
+    shortcut_unescaped = (
+        "![Документ]\n"
+        "\n"
+        "[Документ]: /private/path\n"
+    )
+    escaped_prose = prose_only(shortcut_escaped)
+    unescaped_prose = prose_only(shortcut_unescaped)
+    assert "Документ" in escaped_prose, escaped_prose
+    assert "Документ" not in unescaped_prose, unescaped_prose
+    for excerpt in (escaped_prose, unescaped_prose):
+        assert "/private/path" not in excerpt, excerpt
+
+    # The full [label][ref] form follows the same escaped-! rule.
+    full_escaped = "\\![Документ][ref]\n\n[ref]: /private/path\n"
+    full_unescaped = "![Документ][ref]\n\n[ref]: /private/path\n"
+    assert "Документ" in prose_only(full_escaped), prose_only(full_escaped)
+    assert "Документ" not in prose_only(full_unescaped), prose_only(full_unescaped)
+    # An even number of preceding backslashes leaves '!' unescaped.
+    even_escapes = "\\\\![Документ]\n\n[Документ]: /private/path\n"
+    assert "Документ" not in prose_only(even_escapes), prose_only(even_escapes)
 
     # Reference definitions, including inside blockquotes, hide the entire
     # destination and a continuation title on the next line.
