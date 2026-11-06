@@ -861,6 +861,12 @@ def prose_only(raw: str) -> str:
 
         fence_text, quote_depth = _fence_line(line, list_indents)
         fence = FENCE.match(fence_text)
+        # Display math can live inside a blockquote or a list. Strip the
+        # container prefix before checking its opening/closing markers.
+        math_text = fence_text.lstrip()
+        math_list = re.match(r"^(?:[-*+]|\d+[.)])\s+", math_text)
+        if math_list:
+            math_text = math_text[math_list.end():]
         # The active block wins. A math delimiter inside fenced code is code,
         # and a code fence inside a math block must not affect block state.
         if in_fence:
@@ -872,7 +878,7 @@ def prose_only(raw: str) -> str:
                 in_fence = None
         elif in_math:
             hide(chars, offset, offset + len(line))
-            if in_math in line:
+            if quote_depth == in_math[1] and in_math[0] in math_text:
                 in_math = None
         elif in_html_comment:
             # A comment can contain fence or math delimiters on their own
@@ -885,11 +891,11 @@ def prose_only(raw: str) -> str:
             marker = fence.group(1)
             in_fence = (marker[0], len(marker), quote_depth)
             hide(chars, offset, offset + len(line))
-        elif trimmed.startswith((chr(36) * 2, r"\[")):
+        elif math_text.startswith((chr(36) * 2, r"\[")):
             hide(chars, offset, offset + len(line))
-            closing = chr(36) * 2 if trimmed.startswith(chr(36) * 2) else r"\]"
-            if closing not in trimmed[2:]:
-                in_math = closing
+            closing = chr(36) * 2 if math_text.startswith(chr(36) * 2) else r"\]"
+            if closing not in math_text[2:]:
+                in_math = (closing, quote_depth)
         elif (MODULE.match(line)
               or REFERENCE.match(line)
               or re.match(r"^ {0,3}(?:::{1}|!{3})", line)
