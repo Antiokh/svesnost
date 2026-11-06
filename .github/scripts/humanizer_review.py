@@ -443,6 +443,17 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
     """
     spans = []
     pairs = markdown_bracket_pairs(text)
+    # A link target longer than 8 KiB is not a practical review URL. Bound
+    # each candidate scan to avoid quadratic work on repeated malformed
+    # '[a](' patterns; precompute the next ')' for O(1) fast rejection of
+    # candidates without any closer in the bounded suffix.
+    target_limit = 8192
+    next_close = [-1] * (len(text) + 1)
+    following_close = -1
+    for index in range(len(text) - 1, -1, -1):
+        if text[index] == ")":
+            following_close = index
+        next_close[index] = following_close
     pos = 0
     while pos < len(text):
         image = text.startswith("![", pos)
@@ -458,18 +469,23 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
             pos += 1
             continue
         cursor = label_end + 2
+        scan_end = min(len(text), cursor + target_limit)
+        if next_close[cursor] < 0 or next_close[cursor] >= scan_end:
+            pos += 1
+            continue
         parens = 1
         title_quote = None
         angle_destination = False
         destination_started = False
-        while cursor < len(text):
+        while cursor < scan_end:
             char = text[cursor]
             if char == "\n":
                 # CommonMark allows a title on the following line (but not
-                # a line break inside an unquoted link destination).
-                next_line = text[cursor + 1:].split("\n", 1)[0]
+                # a line break inside an unquoted destination). Bound the
+                # lookahead as well to avoid copying a huge input suffix.
+                next_line = text[cursor + 1:scan_end].split("\n", 1)[0]
                 if not title_quote and not re.match(r"[ \t]*[\"']", next_line):
-                    cursor = len(text)
+                    cursor = scan_end
                     continue
             if char == "\\" and cursor + 1 < len(text):
                 cursor += 2
@@ -659,7 +675,10 @@ def mask_shortcut_reference_images(chars: list[str], labels: set[str]) -> None:
         return
     source = "".join(chars)
     for match in re.finditer(r"!\[([^\]\n]+)\](?!\(|\[)", source):
-        if normalize_reference_label(match.group(1)) in labels:
+        # \![label] is an escaped literal '!' followed by a visible
+        # shortcut reference link. Only an unescaped '!' opens an image.
+        if (not is_markdown_escaped(source, match.start())
+                and normalize_reference_label(match.group(1)) in labels):
             hide(chars, *match.span())
 
 
@@ -1363,11 +1382,16 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
         if normalize_reference_label(label) not in reference_labels:
             continue  # Unresolved image/links are reader-visible literals.
         start, end = match.span()
-        if match.group(1) == "!":
+        has_bang = match.group(1) == "!"
+        is_image = has_bang and not is_markdown_escaped(cleaned, start)
+        if is_image:
             hide(chars, start, end)
         else:
-            hide(chars, start, start + 1)
-            hide(chars, start + 1 + len(match.group(2)), end)
+            # The escaped ! remains visible; the following [label][ref]
+            # is an ordinary reference link whose label is reader prose.
+            label_start = start + int(has_bang)
+            hide(chars, label_start, label_start + 1)
+            hide(chars, label_start + 1 + len(match.group(2)), end)
     cleaned = "".join(chars)
     mask_bare_urls(chars)
     for match in re.finditer(r"\[\^[^\]\n]+\](?=:?)", cleaned):
