@@ -736,7 +736,7 @@ def find_matching_raw_close(text: str, opening_end: int, tag: str) -> int | None
     return None
 
 
-def mask_fenced_blocks(text: str, chars: list[str]) -> None:
+def mask_fenced_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None:
     """Mask code fences including list-indented and quoted Markdown fences.
 
     Existing masks (e.g. raw HTML code containers) are respected, so fences
@@ -748,7 +748,7 @@ def mask_fenced_blocks(text: str, chars: list[str]) -> None:
     list_indents: list[tuple[int, int]] = []
     # Comments are masked before code fences, but markers inside an already
     # open fence are code literals rather than HTML comments.
-    comment_lines = iter(html_comment_scan_view("".join(chars)).splitlines(keepends=True))
+    comment_lines = iter(html_comment_scan_view("".join(chars), is_mdx).splitlines(keepends=True))
     for original_line in "".join(chars).splitlines(keepends=True):
         comment_line = next(comment_lines)
         line = original_line
@@ -990,7 +990,7 @@ def mask_mdx_esm(text: str, chars: list[str]) -> None:
         offset += len(line)
 
 
-def mask_raw_elements_before_blocks(text: str, chars: list[str]) -> None:
+def mask_raw_elements_before_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None:
     """Hide raw HTML/JSX code and table containers before Markdown blocks.
 
     A shadow view protects fenced code, inline code, comments and link targets
@@ -1001,30 +1001,28 @@ def mask_raw_elements_before_blocks(text: str, chars: list[str]) -> None:
     # Use the same list-aware fence rules as the main Markdown scanner.
     # This shadow mask prevents a literal <pre> within fenced code from being
     # mistaken for an opening raw element.
-    mask_fenced_blocks(text, view_chars)
-    # Raw-looking tags inside MDX expressions or ESM string/object content
-    # are JavaScript literals, not HTML. Shield them in this *view* only:
-    # real masks remain owned by prose_only's subsequent ESM/MDX passes.
-    expr_pos = 0
-    shadow = "".join(view_chars)
-    while expr_pos < len(text):
-        if (shadow[expr_pos] == "{" and not is_markdown_escaped(shadow, expr_pos)):
-            close = end_brace(shadow, expr_pos)
-            if close > expr_pos and shadow[close - 1] == "}":
-                hide(view_chars, expr_pos, close)
-                expr_pos = close
-                continue
-        expr_pos += 1
-    mask_mdx_esm(text, view_chars)
+    mask_fenced_blocks(text, view_chars, is_mdx)
+    # Markdown braces are ordinary prose. Only MDX treats them as JavaScript
+    # expressions and has top-level ESM declarations.
+    if is_mdx:
+        expr_pos = 0
+        shadow = "".join(view_chars)
+        while expr_pos < len(text):
+            if (shadow[expr_pos] == "{" and not is_markdown_escaped(shadow, expr_pos)):
+                close = end_brace(shadow, expr_pos)
+                if close > expr_pos and shadow[close - 1] == "}":
+                    hide(view_chars, expr_pos, close)
+                    expr_pos = close
+                    continue
+            expr_pos += 1
+        mask_mdx_esm(text, view_chars)
     view = "".join(view_chars)
     pos = 0
     while pos < len(text):
         if view[pos] == chr(96):
-            run = len(view[pos:]) - len(view[pos:].lstrip(chr(96)))
-            token = chr(96) * run
-            close = view.find(token, pos + run)
-            if close >= 0:
-                pos = close + run
+            close = inline_code_end(view, pos)
+            if close is not None:
+                pos = close
                 continue
         if view.startswith("<!--", pos) and not is_markdown_escaped(view, pos):
             close = view.find("-->", pos + 4)
@@ -1049,7 +1047,22 @@ def mask_raw_elements_before_blocks(text: str, chars: list[str]) -> None:
             pos = end
 
 
-def html_comment_scan_view(raw: str) -> str:
+def inline_code_end(text: str, start: int) -> int | None:
+    """Return the end of a real code span with an exact-length backtick run."""
+    if (start >= len(text) or text[start] != chr(96)
+            or is_markdown_escaped(text, start)):
+        return None
+    opening = len(text[start:]) - len(text[start:].lstrip(chr(96)))
+    pos = start + opening
+    while (next_run := text.find(chr(96), pos)) >= 0:
+        count = len(text[next_run:]) - len(text[next_run:].lstrip(chr(96)))
+        if count == opening:
+            return next_run + count
+        pos = next_run + count
+    return None
+
+
+def html_comment_scan_view(raw: str, is_mdx: bool = True) -> str:
     """Shield comment openers within inline code, MDX expressions and JSX tags.
 
     Only the opener is shielded: a real HTML comment can still close at -->
@@ -1065,12 +1078,8 @@ def html_comment_scan_view(raw: str) -> str:
     while pos < len(raw):
         end = None
         if raw[pos] == chr(96):
-            run = len(raw[pos:]) - len(raw[pos:].lstrip(chr(96)))
-            token = chr(96) * run
-            close = raw.find(token, pos + run)
-            if close >= 0:
-                end = close + run
-        elif raw[pos] == "{" and not is_markdown_escaped(raw, pos):
+            end = inline_code_end(raw, pos)
+        elif is_mdx and raw[pos] == "{" and not is_markdown_escaped(raw, pos):
             end = end_brace(raw, pos)
         elif raw[pos] == "<" and not raw.startswith("<!--", pos):
             match = re.match(r"</?([A-Za-z][\w.:-]*)(?=[\s/>])", raw[pos:])
@@ -1116,18 +1125,19 @@ def mask_html_comments_in_line(
     return "".join(masked), in_comment
 
 
-def prose_only(raw: str) -> str:
+def prose_only(raw: str, *, is_mdx: bool = True) -> str:
     text = body_without_frontmatter(raw)
     chars = list(text)
     # Before detecting raw HTML and ESM, exclude indented Markdown code.
     # Otherwise an indented "<pre>" or incomplete "import {" can swallow
     # the next reader-visible paragraph. Fenced code is masked before ESM.
     paragraph_lines = ordinary_paragraph_continuations(text)
-    mdx_prose_lines = mdx_container_prose_lines(text)
+    mdx_prose_lines = mdx_container_prose_lines(text) if is_mdx else set()
     mask_indented_code_before_blocks(text, chars, paragraph_lines, mdx_prose_lines)
-    mask_raw_elements_before_blocks(text, chars)
-    mask_fenced_blocks(text, chars)
-    mask_mdx_esm(text, chars)
+    mask_raw_elements_before_blocks(text, chars, is_mdx)
+    mask_fenced_blocks(text, chars, is_mdx)
+    if is_mdx:
+        mask_mdx_esm(text, chars)
     reference_labels = mask_reference_definitions(text, chars)
     block_text = "".join(chars)
     offset = 0
@@ -1138,7 +1148,7 @@ def prose_only(raw: str) -> str:
     after_blank = False
     in_html_comment = False
     in_footnote = False
-    comment_lines = iter(html_comment_scan_view(block_text).splitlines(keepends=True))
+    comment_lines = iter(html_comment_scan_view(block_text, is_mdx).splitlines(keepends=True))
 
     for original_line in block_text.splitlines(keepends=True):
         # Shield inline code/MDX attributes when searching for HTML comments;
@@ -1246,7 +1256,7 @@ def prose_only(raw: str) -> str:
             closing = chr(36) * 2 if math_text.startswith(chr(36) * 2) else r"\]"
             if closing not in math_text[2:]:
                 in_math = (closing, quote_depth)
-        elif (MODULE.match(line)
+        elif ((is_mdx and MODULE.match(line))
               or re.match(r"^ {0,3}(?:::{1}|!{3})", line)
               or re.match(r"^ {0,3}(?:-{3,}|\*{3,}|_{3,})\s*$", line)
               or re.match(r"^\s*\|?\s*:?[-]{3,}:?\s*(?:\|.*)?$", line)):
@@ -1288,17 +1298,14 @@ def prose_only(raw: str) -> str:
                         end = len(text)
                 pos = end
                 continue
-        if text[pos] == "{" and not is_markdown_escaped(text, pos):
+        if is_mdx and text[pos] == "{" and not is_markdown_escaped(text, pos):
             end = end_brace(text, pos)
             hide(chars, pos, end)
             pos = end
             continue
         if text[pos] == chr(96):
-            run = len(text[pos:]) - len(text[pos:].lstrip(chr(96)))
-            token = chr(96) * run
-            end = text.find(token, pos + run)
-            if end >= 0:
-                end += run
+            end = inline_code_end(text, pos)
+            if end is not None:
                 hide(chars, pos, end)
                 pos = end
                 continue
@@ -1455,9 +1462,11 @@ def report(paths: list[str | dict[str, str]], base_root: Path, head_root: Path,
         lang = language(file)
         if lang is None:
             continue
-        before = (prose_only(read_article(base_root, previous))
+        before = (prose_only(read_article(base_root, previous),
+                             is_mdx=previous.endswith(".mdx"))
                   if language(previous) == lang else "")
-        after = prose_only(read_article(head_root, file))
+        after = prose_only(read_article(head_root, file),
+                           is_mdx=file.endswith(".mdx"))
         if not after or after == before:
             continue
         if lang == "ru":
