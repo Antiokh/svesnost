@@ -8,7 +8,7 @@ import { ENTITY_KINDS } from './entity-schema.mjs';
 const sorted = (items) => [...new Set(items)].sort();
 
 const referencePattern = /^(person|event|place|source|evidence|media):[a-z0-9][a-z0-9._-]*$/;
-const localeFor = (id) => id.startsWith('ru/') ? 'ru' : id.startsWith('en/') ? 'en' : 'sr';
+const localeFor = (id) => (id === 'ru' || id.startsWith('ru/')) ? 'ru' : (id === 'en' || id.startsWith('en/')) ? 'en' : 'sr';
 
 export function validateEntityCatalog(entries) {
   const catalog = new Map();
