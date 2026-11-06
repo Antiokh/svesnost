@@ -108,15 +108,109 @@ def end_tag(text: str, start: int) -> int:
     return len(text)
 
 
+
+def _table_cells(line: str) -> list[str] | None:
+    """Split a possible GFM row by unescaped pipes, including borderless tables."""
+    row = line.strip()
+    if not re.search(r"(?<!\\)\|", row):
+        return None
+    if row.startswith("|"):
+        row = row[1:]
+    if row.endswith("|") and not row.endswith(r"\|"):
+        row = row[:-1]
+    return [cell.strip() for cell in re.split(r"(?<!\\)\|", row)]
+
+
+def mask_gfm_tables(text: str, chars: list[str]) -> None:
+    """Mask complete GFM tables, not just separator rows and pipe syntax."""
+    lines = text.splitlines(keepends=True)
+    starts = []
+    offset = 0
+    for line in lines:
+        starts.append(offset)
+        offset += len(line)
+
+    for index in range(1, len(lines)):
+        header = _table_cells(lines[index - 1])
+        separators = _table_cells(lines[index])
+        if not header or not separators or len(header) != len(separators):
+            continue
+        if not all(re.fullmatch(r":?-{3,}:?", cell) for cell in separators):
+            continue
+        # A header fully hidden by fenced/indented code is not a table.
+        start = starts[index - 1]
+        if not any(char.strip() for char in chars[start:starts[index]]):
+            continue
+        end_index = index + 1
+        while end_index < len(lines) and _table_cells(lines[end_index]):
+            end_index += 1
+        for line_index in range(index - 1, end_index):
+            hide(chars, starts[line_index], starts[line_index] + len(lines[line_index]))
+
+
+def mask_inline_dollar_math(chars: list[str]) -> None:
+    """Mask $...$ math without consuming escaped dollars or unpaired currency."""
+    text = "".join(chars)
+
+    def escaped(pos: int) -> bool:
+        backslashes = 0
+        pos -= 1
+        while pos >= 0 and text[pos] == "\\":
+            backslashes += 1
+            pos -= 1
+        return backslashes % 2 == 1
+
+    pos = 0
+    while pos < len(text):
+        if (text[pos] != "$" or escaped(pos)
+                or (pos > 0 and text[pos - 1] == "$")
+                or (pos + 1 < len(text) and (text[pos + 1] == "$" or text[pos + 1].isspace()))):
+            pos += 1
+            continue
+        end = pos + 1
+        while end < len(text) and text[end] != "\n":
+            if text[end] == "$" and not escaped(end) and (end + 1 == len(text) or text[end + 1] != "$"):
+                if not text[end - 1].isspace():
+                    hide(chars, pos, end + 1)
+                    pos = end + 1
+                    break
+            end += 1
+        else:
+            pos += 1
+
 def prose_only(raw: str) -> str:
     text = body_without_frontmatter(raw)
     chars = list(text)
     offset = 0
     in_fence = None
     in_math = None
+    list_indents: list[tuple[int, int]] = []
+    after_blank = False
 
     for line in text.splitlines(keepends=True):
         trimmed = line.lstrip()
+        indent = len(line) - len(trimmed)
+        list_marker = re.match(r"^( *)(?:[-*+]|\d+[.)])\s+", line)
+        if not trimmed.strip():
+            after_blank = bool(list_indents)
+        elif list_marker:
+            if indent >= 4 and not list_indents:
+                hide(chars, offset, offset + len(line))
+            else:
+                while list_indents and list_indents[-1][0] >= indent:
+                    list_indents.pop()
+                list_indents.append((indent, len(list_marker.group(0))))
+            after_blank = False
+        elif indent >= 4:
+            if (not list_indents or
+                    (after_blank and indent >= list_indents[-1][1] + 4)):
+                hide(chars, offset, offset + len(line))
+            after_blank = False
+        else:
+            if list_indents and indent < list_indents[0][1]:
+                list_indents.clear()
+            after_blank = False
+
         fence = FENCE.match(line)
         if in_math:
             hide(chars, offset, offset + len(line))
@@ -136,14 +230,15 @@ def prose_only(raw: str) -> str:
             marker = fence.group(1)
             in_fence = (marker[0], len(marker))
             hide(chars, offset, offset + len(line))
-        elif (line.startswith(("    ", "\t")) and trimmed.strip()
-              or MODULE.match(line)
+        elif (MODULE.match(line)
               or REFERENCE.match(line)
               or re.match(r"^ {0,3}(?:::{1}|!{3})", line)
               or re.match(r"^ {0,3}(?:-{3,}|\*{3,}|_{3,})\s*$", line)
               or re.match(r"^\s*\|?\s*:?[-]{3,}:?\s*(?:\|.*)?$", line)):
             hide(chars, offset, offset + len(line))
         offset += len(line)
+
+    mask_gfm_tables(text, chars)
 
     pos = 0
     while pos < len(text):
@@ -208,6 +303,7 @@ def prose_only(raw: str) -> str:
     for match in re.finditer(r"\\\([\s\S]*?\\\)", cleaned):
         hide(chars, *match.span())
 
+    mask_inline_dollar_math(chars)
     cleaned = "".join(chars)
     cleaned = re.sub(r"(?m)^[ \t]*\|?[ \t]*:?-{3,}:?[ \t|:-]*$", "", cleaned)
     cleaned = re.sub(r"[*_~|]", " ", cleaned)
@@ -256,13 +352,32 @@ def russian_new(module, base: str, head: str) -> list[dict]:
 
 
 def serbian_new(module, base: str, head: str) -> list[dict]:
-    original = {f.rule_id: f.count for f in module.review(base)} if base else {}
-    return [
-        {"rule_id": f.rule_id, "category": f.category, "message": f.message,
-         "count": f.count, "evidence": f.evidence}
-        for f in module.review(head)
-        if f.count > original.get(f.rule_id, 0)
-    ] if head else []
+    """Subtract evidence per rule as a multiset, not just aggregate hit counts."""
+    if not head:
+        return []
+    before = {f.rule_id: f for f in module.review(base)} if base else {}
+    out = []
+    for finding in module.review(head):
+        previous = before.get(finding.rule_id)
+        old_fragments = Counter(normalized(e) for e in previous.evidence) if previous else Counter()
+        new_fragments = []
+        for excerpt in finding.evidence:
+            key = normalized(excerpt)
+            if old_fragments[key]:
+                old_fragments[key] -= 1
+            else:
+                new_fragments.append(excerpt)
+        extra_count = max(0, finding.count - (previous.count if previous else 0))
+        if not new_fragments and extra_count == 0:
+            continue
+        out.append({
+            "rule_id": finding.rule_id,
+            "category": finding.category,
+            "message": finding.message,
+            "count": max(len(new_fragments), extra_count),
+            "evidence": new_fragments,
+        })
+    return out
 
 
 def inline(value: object, limit: int = 230) -> str:
