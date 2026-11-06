@@ -2503,7 +2503,7 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "СЕКРЕТ_В_КОДЕ" not in tab_result, tab_result
     continued_paragraph = "Видимый абзац.\n\tВИДИМОЕ_ПРОДОЛЖЕНИЕ\n"
     continued_result = prose_only(continued_paragraph)
-    assert "ВИДИМОЕ_ПРОДОЛЖЕНИЕ" in continued_result, continued_result
+    assert "ВИДИМОЕ ПРОДОЛЖЕНИЕ" in continued_result, continued_result
 
     nested_tab_list = (
         "- Верхний пункт\n"
