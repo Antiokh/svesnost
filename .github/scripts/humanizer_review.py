@@ -71,6 +71,34 @@ def is_markdown_escaped(text: str, pos: int) -> bool:
     return backslashes % 2 == 1
 
 
+def skip_js_regex(text: str, start: int) -> int | None:
+    """Scan a JS regex literal, respecting escapes and [...] character classes."""
+    preceding = text[:start].rstrip()
+    if (preceding and preceding[-1] not in "=([{,:;!?|&+-*%^~<>"
+            and not re.search(r"\b(?:return|case|throw|yield|await|of|in)\s*$", preceding)):
+        return None
+    index = start + 1
+    in_class = False
+    while index < len(text):
+        char = text[index]
+        if char in "\r\n":
+            return None
+        if char == "\\":
+            index += 2
+            continue
+        if char == "[":
+            in_class = True
+        elif char == "]" and in_class:
+            in_class = False
+        elif char == "/" and not in_class:
+            index += 1
+            while index < len(text) and text[index].isalpha():
+                index += 1
+            return index
+        index += 1
+    return None
+
+
 def end_brace(text: str, start: int) -> int:
     depth = 0
     quote = ""
@@ -95,6 +123,11 @@ def end_brace(text: str, start: int) -> int:
             continue
         elif char in ("'", '"', chr(96)):
             quote = char
+        elif char == "/":
+            regex_end = skip_js_regex(text, pos)
+            if regex_end is not None:
+                pos = regex_end
+                continue
         elif char == "{":
             depth += 1
         elif char == "}":
@@ -241,7 +274,11 @@ def mask_gfm_tables(text: str, chars: list[str]) -> None:
                 r"(?:[-*+]|\d+[.)])[ \t]+|"
                 r"`{3,}|~{3,}|"
                 r"(?:---|\*\*\*|___)[ \t]*$|"
-                r"<(?:[A-Za-z/!]))",
+                # Inline tags <em>, <strong>, <a> remain table cell data.
+                r"<(?:!--|/?(?:address|article|aside|blockquote|body|"
+                r"center|details|div|dl|figure|footer|form|h[1-6]|header|"
+                r"hr|html|iframe|li|main|nav|ol|p|pre|script|section|"
+                r"style|table|tbody|td|tfoot|th|thead|tr|ul)\b))",
                 row_text
             ):
                 break
@@ -304,6 +341,65 @@ def mask_inline_dollar_math(chars: list[str]) -> None:
             end += 1
         else:
             pos += 1
+
+
+def valid_inline_link_payload(payload: str) -> bool:
+    """Accept only a CommonMark destination and optional quoted title."""
+    if "\n\n" in payload or "\r\n\r\n" in payload:
+        return False
+    value = payload.lstrip(" \t")
+    if not value:
+        return True
+    if value[0] == "<":
+        end = 1
+        while end < len(value) and value[end] != ">":
+            if value[end] == "\\" and end + 1 < len(value):
+                end += 2
+                continue
+            if value[end] in "<\n\r":
+                return False
+            end += 1
+        if end == len(value):
+            return False
+        end += 1
+    else:
+        end = 0
+        nesting = 0
+        while end < len(value) and not value[end].isspace():
+            if value[end] == "\\" and end + 1 < len(value):
+                end += 2
+                continue
+            if value[end] == "<":
+                return False
+            if value[end] == "(":
+                nesting += 1
+            elif value[end] == ")":
+                nesting -= 1
+                if nesting < 0:
+                    return False
+            end += 1
+        if nesting:
+            return False
+    trailer = value[end:]
+    if not trailer:
+        return True
+    if not trailer[0].isspace():
+        return False
+    title = trailer.strip()
+    if not title:
+        return True
+    if title[0] not in ("'", '"', "("):
+        return False
+    closing = ")" if title[0] == "(" else title[0]
+    index = 1
+    while index < len(title):
+        if title[index] == "\\" and index + 1 < len(title):
+            index += 2
+            continue
+        if title[index] == closing:
+            return not title[index + 1:].strip()
+        index += 1
+    return False
 
 
 def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
@@ -388,6 +484,9 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
             elif char == ")":
                 parens -= 1
                 if parens == 0:
+                    if not valid_inline_link_payload(text[label_end + 2:cursor]):
+                        pos += 1
+                        break
                     spans.append((pos, cursor + 1, label_start, label_end, image))
                     # Inspect the label as well: [![alt](src)](href) contains
                     # an image whose alt must be excluded independently.
