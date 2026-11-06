@@ -11,7 +11,7 @@ export default defineConfig({
       },
       customCss: ['./src/styles/theme.css'],
       logo: {
-        src: '/favicon.svg',
+        src: './src/assets/logo.svg',
         alt: 'Svesnost',
       },
       head: [
