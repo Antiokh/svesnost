@@ -325,8 +325,15 @@ def mask_inline_dollar_math(chars: list[str]) -> None:
         if trailing and trailing.isalpha():
             return False
         if trailing.isspace():
-            # Numeric expressions such as '$2 + 2 = 4
-
+            # A numeric expression with spaced operators is math, not money.
+            line_end = text.find("\n", end)
+            suffix = text[end:line_end if line_end >= 0 else len(text)]
+            if re.match(
+                r"\s+[+\-*/=^]\s*[\w.]+(?:\s*[+\-*/=^]\s*[\w.]+)*\s*\x24",
+                suffix,
+            ):
+                return False
+        return not trailing or trailing.isspace() or trailing in ",.;:!?)]}"
     pos = 0
     while pos < len(text):
         if (text[pos] != "$" or escaped(pos) or starts_currency(pos)
