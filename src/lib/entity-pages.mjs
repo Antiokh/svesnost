@@ -7,7 +7,9 @@ import { localeFor } from './entity-projections.mjs';
 const dataPath = path.resolve('public/generated/entity-index.json');
 let index;
 export function getEntityPageData(route) {
-  if (!index) index = JSON.parse(readFileSync(dataPath, 'utf8'));
+  // During astro dev, projection files are regenerated on content edits.
+  // Re-read every request rather than caching a stale graph for the process lifetime.
+  if (!index || import.meta.env?.DEV) index = JSON.parse(readFileSync(dataPath, 'utf8'));
   const locale = localeFor(route.id);
   const current = index.locales[locale];
   if (!current || !route.entry?.data?.entityId) return null;

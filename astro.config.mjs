@@ -1,7 +1,9 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import { entityDataDevPlugin } from './src/lib/entity-dev-plugin.mjs';
 
 export default defineConfig({
+  vite: { plugins: [entityDataDevPlugin()] },
   integrations: [
     starlight({
       title: { sr: 'Свесност', ru: 'Свесност', en: 'Svesnost' },
