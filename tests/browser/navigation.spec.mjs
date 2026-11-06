@@ -6,7 +6,7 @@ test('mobile splash exposes language and theme controls in all editions', async 
     await page.goto(url);
     const toolbar = page.locator('[data-sves-mobile-toolbar]');
     await expect(toolbar).toBeVisible();
-    await expect(toolbar.locator('select[data-sves-language-mobile]')).toHaveCount(1);
+    await expect(toolbar.locator('details[data-sves-language-mobile]')).toHaveCount(1);
     await expect(toolbar.locator('select[data-sves-theme-mobile]')).toHaveCount(1);
   }
   // Narrow devices must not push the controls off-screen.
@@ -20,7 +20,9 @@ test('mobile splash exposes language and theme controls in all editions', async 
 test('mobile language switching and theme survive navigation and reload', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'mobile');
   await page.goto('/');
-  await page.locator('[data-sves-mobile-toolbar] select[data-sves-language-mobile]').selectOption('/ru/');
+  const languages = page.locator('[data-sves-mobile-toolbar] details[data-sves-language-mobile]');
+  await languages.locator('summary').click();
+  await languages.locator('a[href="/ru/"]').click();
   await expect(page).toHaveURL(/\/ru\/$/);
   await page.locator('[data-sves-mobile-toolbar] select[data-sves-theme-mobile]').selectOption('light');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
@@ -38,8 +40,19 @@ test('mobile popover retains Escape and contains compact preferences', async ({ 
   await expect.poll(() => popover.evaluate((node) => node.matches(':popover-open'))).toBe(true);
   await expect(popover.locator('.language-mobile')).toBeVisible();
   await expect(popover.locator('.theme-mobile')).toBeVisible();
+  const mainFrame = page.locator('.main-frame');
+  const skipLink = page.locator('.sl-skip-link');
+  await expect(mainFrame).toHaveAttribute('inert', '');
+  await expect(skipLink).toHaveAttribute('inert', '');
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => {
+    const active = document.activeElement;
+    return Boolean(active?.closest('header, #starlight__sidebar'));
+  })).toBe(true);
   await page.keyboard.press('Escape');
   await expect.poll(() => popover.evaluate((node) => node.matches(':popover-open'))).toBe(false);
+  await expect(mainFrame).not.toHaveAttribute('inert', '');
+  await expect(skipLink).not.toHaveAttribute('inert', '');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect.poll(() => popover.evaluate((node) => getComputedStyle(node).transitionDuration)).toBe('0s');
 });
@@ -132,4 +145,35 @@ test('system appearance follows OS changes only in auto mode', async ({ page }, 
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+});
+
+// The primary language navigation must remain functional when client scripts fail.
+test.describe('language navigation without JavaScript', () => {
+  test.use({ javaScriptEnabled: false });
+
+  test('mobile splash and article menus navigate by real links', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'mobile');
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.goto('/');
+    const splash = page.locator('[data-sves-mobile-toolbar] details[data-sves-language-mobile]');
+    await expect(splash.locator('summary')).toBeVisible();
+    await splash.locator('summary').click();
+    await expect(splash).toHaveAttribute('open', '');
+    await expect(splash.locator('a[href="/ru/"]')).toBeVisible();
+    await splash.locator('a[href="/ru/"]').click();
+    await expect(page).toHaveURL(/\/ru\/$/);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'ru');
+
+    // A Serbian-only article must link to the target language home.
+    await page.goto('/materials/izvori/');
+    await page.locator('button[popovertarget="starlight__sidebar"]').click();
+    const sidebar = page.locator('#starlight__sidebar');
+    await expect.poll(() => sidebar.evaluate((node) => node.matches(':popover-open'))).toBe(true);
+    const selector = sidebar.locator('details[data-sves-language-mobile]');
+    await selector.locator('summary').click();
+    await expect(selector.locator('a[href="/en/"]')).toBeVisible();
+    await selector.locator('a[href="/en/"]').click();
+    await expect(page).toHaveURL(/\/en\/$/);
+    await expect(page.locator('html')).toHaveAttribute('lang', 'en');
+  });
 });

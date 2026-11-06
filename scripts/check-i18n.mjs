@@ -14,14 +14,14 @@ for (const [url, lang] of [['/', 'sr'], ['/ru/', 'ru'], ['/en/', 'en']]) {
   assert.match(html, new RegExp('<html[^>]+lang="' + lang + '"'), url + ' wrong html language');
   assert.ok(html.includes('data-pagefind-body'), url + ' should be indexed');
   assert.ok(html.includes('data-sves-mobile-toolbar'), url + ' splash must provide mobile controls');
-  assert.ok(html.includes('data-sves-language-mobile'), url + ' lacks mobile language switch');
+  assert.match(html, /<details[^>]*data-sves-language-mobile/, url + ' must use no-JS mobile language links');
   assert.ok(html.includes('data-sves-theme-mobile'), url + ' lacks mobile theme switch');
 }
 for (const lang of ['sr', 'ru', 'en']) {
   const prefix = lang === 'sr' ? '' : '/' + lang;
   const html = read(prefix + '/materials/');
   assert.match(html, new RegExp('<html[^>]+lang="' + lang + '"'));
-  assert.ok(html.includes('data-sves-language-mobile'), prefix + '/materials/ lacks menu language control');
+  assert.match(html, /<details[^>]*data-sves-language-mobile/, prefix + '/materials/ must use no-JS mobile language links');
   assert.ok(html.includes('data-sves-theme-mobile'), prefix + '/materials/ lacks menu theme control');
 }
 
