@@ -683,18 +683,25 @@ def mask_shortcut_reference_images(chars: list[str], labels: set[str]) -> None:
 
 
 def mask_uri_autolinks(chars: list[str]) -> None:
-    """Hide CommonMark <scheme:destination> autolinks outside masked code.
+    """Hide CommonMark URI and email autolinks outside protected markup.
 
-    A scheme is 2-32 characters, starting with an ASCII letter and followed
-    by ASCII letters, digits, '.', '+' or '-'. The URI has no whitespace,
-    controls or angle brackets. Use the live shadow so fenced/inline code,
-    link targets, JSX attributes and raw blocks are already excluded.
+    URI schemes have 2–32 ASCII characters. Email autolinks use the
+    CommonMark local-part and domain grammar; both types are enclosed in
+    unescaped angle brackets. The live shadow has code/targets masked first.
     """
     source = "".join(chars)
-    pattern = re.compile(r"<[A-Za-z][A-Za-z0-9.+-]{1,31}:[^\x00-\x20<>]+>")
-    for match in pattern.finditer(source):
-        if not is_markdown_escaped(source, match.start()):
-            hide(chars, *match.span())
+    patterns = (
+        re.compile(r"<[A-Za-z][A-Za-z0-9.+-]{1,31}:[^\x00-\x20<>]+>"),
+        re.compile(
+            r"<[A-Za-z0-9.!#$%&'*+/=?^_\x60{|}~-]+@"
+            r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+            r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*>"
+        ),
+    )
+    for pattern in patterns:
+        for match in pattern.finditer(source):
+            if not is_markdown_escaped(source, match.start()):
+                hide(chars, *match.span())
 
 
 def mask_bare_urls(chars: list[str]) -> None:
@@ -1200,7 +1207,10 @@ def mask_markdown_line_prefixes(chars: list[str]) -> None:
 
 
 def prose_only(raw: str, *, is_mdx: bool = True) -> str:
-    text = body_without_frontmatter(raw)
+    # CommonMark tabs advance to the next four-column stop, including after
+    # list/blockquote markers. Expand before ALL lexical passes so offsets,
+    # code indents and nested list thresholds share the same column model.
+    text = body_without_frontmatter(raw).expandtabs(4)
     chars = list(text)
     # Before detecting raw HTML and ESM, exclude indented Markdown code.
     # Otherwise an indented "<pre>" or incomplete "import {" can swallow
