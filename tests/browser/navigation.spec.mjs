@@ -177,3 +177,15 @@ test.describe('language navigation without JavaScript', () => {
     await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   });
 });
+
+// Empty collections must not produce fake map markers, fallback-language routes or layout regressions.
+test('event map keeps static localized fallback when no event coordinates exist', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile');
+  for (const [url,lang] of [['/events/map/','sr'],['/ru/events/map/','ru'],['/en/events/map/','en']]) {
+    await page.goto(url);
+    await expect(page.locator('html')).toHaveAttribute('lang',lang);
+    await expect(page.locator('[data-event-map]')).toHaveCount(1);
+    await expect(page.locator('[data-event-map]')).toHaveAttribute('data-map-ready','empty');
+    await expect(page.locator('.sves-map-canvas')).toHaveCount(0);
+  }
+});

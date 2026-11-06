@@ -1,4 +1,9 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { checkMediaFile } from '../src/lib/entity-files.mjs';
+import { buildEntityProjections } from '../src/lib/entity-projections.mjs';
 import { z } from 'astro/zod';
 import { entityFields, ENTITY_KINDS, SOURCE_TYPES, MEDIA_TYPES } from '../src/lib/entity-schema.mjs';
 import { validateEntityCatalog } from '../src/lib/entity-catalog.mjs';
@@ -76,4 +81,46 @@ assert.throws(() => validateEntityCatalog([
   ...records,
   entry('people/rival', 'person', 'person:rival', { relations: [{ target: 'media:video', kind: 'rival' }] }),
 ]), /expected person reference/);
-console.log('Entity schema, canonical IDs, evidence/media and references: OK');
+
+// Build-derived views and multilingual isolation, including a georeferenced event.
+const derived = buildEntityProjections(records);
+assert.equal(derived.locales.sr.records.length, 7);
+assert.equal(derived.locales.ru.records.length, 1);
+assert.deepEqual(derived.locales.sr.indexes.byPersonEvents['person:alex'], ['event:congress']);
+assert.deepEqual(derived.locales.sr.indexes.byPlaceEvents['place:city'], ['event:congress']);
+assert.deepEqual(derived.locales.sr.indexes.byPersonPlaces['person:alex'], ['place:city']);
+assert.deepEqual(derived.locales.sr.indexes.byPersonRelations['person:alex'], ['person:other-alex']);
+assert.equal(derived.locales.ru.indexes.byPersonEvents['person:alex'], undefined);
+assert.equal(derived.geojson.features.length, 1);
+assert.equal(derived.geojson.features[0].properties.locale, 'sr');
+assert.equal(derived.geojson.features[0].properties.eventUrl, '/events/congress/');
+assert.deepEqual(derived.geojson.features[0].geometry.coordinates, [20.4,44.8]);
+const withEvidence = [...records, entry('evidence/other/index','evidence','evidence:other',{
+  subjectRefs:['event:congress','person:alex'], sourceRefs:['source:chronicle'],
+})];
+const withEvidenceModel = buildEntityProjections(withEvidence);
+assert.deepEqual(withEvidenceModel.locales.sr.indexes.bySubjectEvidence['event:congress'], ['evidence:other']);
+assert.deepEqual(withEvidenceModel.locales.sr.indexes.bySourceEvidence['source:chronicle'], ['evidence:claim','evidence:other']);
+assert.throws(() => validateEntityCatalog([...records,entry('evidence/bad-subject','evidence','evidence:bad-subject',{
+  subjectRefs:['media:video'],
+})]), /evidence subject must be person, event or place/);
+assert.throws(() => validateEntityCatalog([...records,entry('people/bad-evidence','person','person:bad-evidence',{
+  evidenceRefs:['evidence:missing'],
+})]), /unknown entity reference evidence:missing/);
+
+const dir = mkdtempSync(path.join(tmpdir(),'sves-entity-assets-'));
+try {
+  const recordDir = path.join(dir,'media');
+  mkdirSync(recordDir);
+  const document = path.join(recordDir,'fixture.md');
+  writeFileSync(document,'fixture');
+  writeFileSync(path.join(recordDir,'real.pdf'),'%PDF-1.0 fixture');
+  checkMediaFile('./real.pdf',document,dir);
+  assert.throws(() => checkMediaFile('./does-not-exist.pdf',document,dir), /does not exist/);
+  assert.throws(() => checkMediaFile('../escape.pdf',document,dir), /must be a safe local/);
+  assert.throws(() => checkMediaFile('https://example.org/remote.pdf',document,dir), /must be a safe local/);
+  assert.throws(() => checkMediaFile('',document,dir), /must be a safe local/);
+} finally {
+  rmSync(dir,{recursive:true,force:true});
+}
+console.log('Entity fields, relationship hierarchies, assets and derived views: OK');
