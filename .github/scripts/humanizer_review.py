@@ -212,24 +212,26 @@ def prose_only(raw: str) -> str:
             after_blank = False
 
         fence = FENCE.match(line)
-        if in_math:
+        # The active block wins. A math delimiter inside fenced code is code,
+        # and a code fence inside a math block must not affect block state.
+        if in_fence:
+            hide(chars, offset, offset + len(line))
+            if (trimmed.rstrip().startswith(in_fence[0] * in_fence[1])
+                    and not trimmed.rstrip().lstrip(in_fence[0]).strip()):
+                in_fence = None
+        elif in_math:
             hide(chars, offset, offset + len(line))
             if in_math in line:
                 in_math = None
+        elif fence:
+            marker = fence.group(1)
+            in_fence = (marker[0], len(marker))
+            hide(chars, offset, offset + len(line))
         elif trimmed.startswith((chr(36) * 2, r"\[")):
             hide(chars, offset, offset + len(line))
             closing = chr(36) * 2 if trimmed.startswith(chr(36) * 2) else r"\]"
             if closing not in trimmed[2:]:
                 in_math = closing
-        elif in_fence:
-            hide(chars, offset, offset + len(line))
-            if (trimmed.rstrip().startswith(in_fence[0] * in_fence[1])
-                    and not trimmed.rstrip().lstrip(in_fence[0]).strip()):
-                in_fence = None
-        elif fence:
-            marker = fence.group(1)
-            in_fence = (marker[0], len(marker))
-            hide(chars, offset, offset + len(line))
         elif (MODULE.match(line)
               or REFERENCE.match(line)
               or re.match(r"^ {0,3}(?:::{1}|!{3})", line)
@@ -294,6 +296,16 @@ def prose_only(raw: str) -> str:
             label_end = start + 1 + len(match.group(1))
             hide(chars, label_end, end)
     cleaned = "".join(chars)
+    # Markdown reference links preserve their visible label, not [reference-id].
+    # Images are not body prose, including reference-style image labels.
+    for match in re.finditer(r"(!?)\[([^\]\n]+)\]\[([^\]\n]*)\]", cleaned):
+        start, end = match.span()
+        if match.group(1) == "!":
+            hide(chars, start, end)
+        else:
+            hide(chars, start, start + 1)
+            hide(chars, start + 1 + len(match.group(2)), end)
+    cleaned = "".join(chars)
     for match in re.finditer(r"https?://[^\s)>\]]+", cleaned):
         hide(chars, *match.span())
     for match in re.finditer(r"\[\^[^\]\n]+\](?=:?)", cleaned):
@@ -351,22 +363,53 @@ def russian_new(module, base: str, head: str) -> list[dict]:
     return out
 
 
+def serbian_all_evidence(module, finding, text: str) -> list[str]:
+    """Recover the complete evidence for each rule of the pinned Serbian seed.
+
+    The upstream checker intentionally caps its public evidence at five examples
+    while keeping the full count. Comparing only that preview misses replaced
+    sixth-and-later matches, so we use its very same compiled patterns on the
+    same input. Keep this adapter aligned with the pinned upstream revision.
+    """
+    normalized_text = module.normalize_script(text)
+    if finding.rule_id == "sr_ai_negative_parallelism_density":
+        pattern = module.NEGATIVE_PARALLELISM_RE
+        return [module._compact_ws(m.group(0)) for m in pattern.finditer(normalized_text)]
+    if finding.rule_id == "sr_ai_triplet_density":
+        pattern = module.TRIPLET_RE
+        return [module._compact_ws(m.group(0)) for m in pattern.finditer(normalized_text)]
+    if finding.rule_id == "sr_ai_repeated_section_scaffold":
+        headings = [module._compact_ws(h) for h in module.HEADING_RE.findall(text)]
+        counts = Counter(module.normalize_script(h).casefold() for h in headings)
+        return [f"{heading} × {count}" for heading, count in counts.most_common() if count >= 3]
+    if finding.rule_id == "sr_ai_heading_fragmentation":
+        return [module._compact_ws(h) for h in module.HEADING_RE.findall(text)]
+    # Unknown future rules must not silently use a truncated five-item preview.
+    if finding.count > len(finding.evidence):
+        raise RuntimeError(f"Unrecognized Serbian Humanizer rule with truncated evidence: {finding.rule_id}")
+    return list(finding.evidence)
+
+
 def serbian_new(module, base: str, head: str) -> list[dict]:
-    """Subtract evidence per rule as a multiset, not just aggregate hit counts."""
+    """Subtract the complete multiset of matched evidence, not summary counts."""
     if not head:
         return []
     before = {f.rule_id: f for f in module.review(base)} if base else {}
     out = []
     for finding in module.review(head):
         previous = before.get(finding.rule_id)
-        old_fragments = Counter(normalized(e) for e in previous.evidence) if previous else Counter()
+        old_evidence = serbian_all_evidence(module, previous, base) if previous else []
+        new_evidence = serbian_all_evidence(module, finding, head)
+        old_fragments = Counter(re.sub(r"\s+", " ", e).strip().casefold() for e in old_evidence)
         new_fragments = []
-        for excerpt in finding.evidence:
-            key = normalized(excerpt)
+        for excerpt in new_evidence:
+            key = re.sub(r"\s+", " ", excerpt).strip().casefold()
             if old_fragments[key]:
                 old_fragments[key] -= 1
             else:
                 new_fragments.append(excerpt)
+        # Some rules report a count of affected instances rather than evidence
+        # strings; retain their aggregate increase as an additional signal.
         extra_count = max(0, finding.count - (previous.count if previous else 0))
         if not new_fragments and extra_count == 0:
             continue
