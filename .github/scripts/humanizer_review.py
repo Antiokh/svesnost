@@ -482,7 +482,90 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "Проза до формулы." in isolated and "Содержимое примечания" in isolated
     assert "И проза после." in isolated and "x^2" not in isolated
     assert "---" not in isolated and ":::note" not in isolated and chr(36) * 2 not in isolated
+    # Entire GFM table blocks are structural data, with or without border pipes.
+    table = """Текст до таблицы.
+
+| Участник | Сумма |
+| --- | ---: |
+| Иван | 1000 |
+| Ольга | 2000 |
+
+Текст после таблицы.
+"""
+    table_result = prose_only(table)
+    assert "Текст до таблицы" in table_result and "Текст после таблицы" in table_result
+    for value in ("Участник", "Сумма", "Иван", "Ольга", "1000", "2000"):
+        assert value not in table_result, ("table leaked", value, table_result)
+
+    borderless = """До таблицы.
+Имя | Значение
+--- | ---
+Мария | 900
+После таблицы.
+"""
+    borderless_result = prose_only(borderless)
+    assert "До таблицы" in borderless_result and "После таблицы" in borderless_result
+    assert "Мария" not in borderless_result and "900" not in borderless_result
+    assert "Обычная проза" in prose_only("Обычная проза А | Б без таблицы.")
+
+    # Indented nested list items are prose, but standalone indented blocks are code.
+    nested = """- Основной пункт списка
+    - Вложенный пункт списка
+      Продолжение вложенного пункта
+
+После списка.
+
+    СКРЫТЫЙ КОД
+"""
+    nested_result = prose_only(nested)
+    for value in ("Основной пункт", "Вложенный пункт", "Продолжение вложенного пункта", "После списка"):
+        assert value in nested_result, ("nested list lost", value, nested_result)
+    assert "СКРЫТЫЙ КОД" not in nested_result
+
+    # Inline TeX is markup; an escaped dollar or an unpaired currency sign is not.
+    dollars = r"Формула $E=mc^2$ используется. Цена $5, другая цена $10. Экранировано \$5."
+    dollars_result = prose_only(dollars)
+    assert "$E=mc^2$" not in dollars_result and "E=mc" not in dollars_result
+    for value in ("Формула", "используется", "$5", "$10"):
+        assert value in dollars_result, ("currency or prose lost", value, dollars_result)
+    assert "$E = mc^2$" not in prose_only("Формула $E = mc^2$ описана словами.")
+    escaped_math = prose_only(r"Оставить литерал \$E=mc^2\$ как текст.")
+    assert "E=mc^2" in escaped_math, ("escaped math incorrectly masked", escaped_math)
+
+    # Serbian findings are subtracted by evidence multiset, not by total rule count.
+    from types import SimpleNamespace
+
+    def serbian_stub(text: str):
+        if text == "before":
+            return [SimpleNamespace(
+                rule_id="sr_test", category="AI_STYLE_SIGNAL", message="Sample",
+                count=2, evidence=["Стари образац", "Исти образац"])]
+        if text == "after":
+            return [SimpleNamespace(
+                rule_id="sr_test", category="AI_STYLE_SIGNAL", message="Sample",
+                count=2, evidence=["Исти образац", "Нови образац"])]
+        if text == "same":
+            return [SimpleNamespace(
+                rule_id="sr_test", category="AI_STYLE_SIGNAL", message="Sample",
+                count=2, evidence=["Исти образац", "Стари образац"])]
+        if text == "twice":
+            return [SimpleNamespace(
+                rule_id="sr_test", category="AI_STYLE_SIGNAL", message="Sample",
+                count=3, evidence=["Стари образац", "Исти образац", "Исти образац"])]
+        return []
+
+    module = SimpleNamespace(review=serbian_stub)
+    findings = serbian_new(module, "before", "after")
+    assert len(findings) == 1 and findings[0]["evidence"] == ["Нови образац"], findings
+    assert findings[0]["count"] == 1
+    assert serbian_new(module, "before", "same") == []
+    repeated = serbian_new(module, "before", "twice")
+    assert len(repeated) == 1 and repeated[0]["count"] == 1, repeated
+    assert repeated[0]["evidence"] == ["Исти образац"], repeated
+
     return {"result": "OK", "frontmatter": "excluded", "mdx_jsx": "excluded",
+            "gfm_tables": "excluded", "nested_list_prose": "retained",
+            "inline_math": "excluded", "serbian_evidence_delta": "verified",
             "readable_prose": "retained", "languages": ["ru", "sr"]}
 
 
