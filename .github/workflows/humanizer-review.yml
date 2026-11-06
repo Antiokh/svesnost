@@ -1,0 +1,124 @@
+name: Језичка редактура / Языковая редактура
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  HUMANIZER_RUSSIAN_SHA: 81af17bcb18ae9364a9f94f4e2f849a68d3b1eee
+  HUMANIZER_SERBIAN_SHA: ebf49b929f4f6c75b2e7e5a8814ff0f17a4f46ab
+
+jobs:
+  humanizer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trusted adapter from base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Proposed content from PR
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Check trusted adapter availability
+        id: trusted
+        run: |
+          if test -f base/.github/scripts/humanizer_review.py; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "First integration PR is tested by the separate read-only contract workflow." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Select changed article files
+        if: steps.trusted.outputs.ready == 'true'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const fs = require('fs');
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+            const articles = files
+              .filter(file =>
+                file.status !== 'removed' &&
+                file.filename.startsWith('src/content/docs/') &&
+                /\.(md|mdx)$/.test(file.filename) &&
+                !file.filename.startsWith('src/content/docs/en/')
+              )
+              .map(file => file.filename);
+            fs.writeFileSync('/tmp/humanizer-files.txt', articles.join('\n'));
+      - name: Fetch pinned language editors
+        if: steps.trusted.outputs.ready == 'true'
+        run: |
+          git init /tmp/humanizer_russian
+          git -C /tmp/humanizer_russian remote add origin https://github.com/Antiokh/humanizer_russian.git
+          git -C /tmp/humanizer_russian fetch --depth=1 origin "$HUMANIZER_RUSSIAN_SHA"
+          git -C /tmp/humanizer_russian checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/humanizer_russian rev-parse HEAD)" = "$HUMANIZER_RUSSIAN_SHA"
+          git init /tmp/humanizer_serbian
+          git -C /tmp/humanizer_serbian remote add origin https://github.com/Antiokh/humanizer_serbian.git
+          git -C /tmp/humanizer_serbian fetch --depth=1 origin "$HUMANIZER_SERBIAN_SHA"
+          git -C /tmp/humanizer_serbian checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/humanizer_serbian rev-parse HEAD)" = "$HUMANIZER_SERBIAN_SHA"
+      - name: Generate prose-only editorial review
+        if: steps.trusted.outputs.ready == 'true'
+        run: |
+          python3 base/.github/scripts/humanizer_review.py \
+            --files /tmp/humanizer-files.txt \
+            --base-root base \
+            --head-root head \
+            --russian-root /tmp/humanizer_russian \
+            --serbian-root /tmp/humanizer_serbian \
+            --output /tmp/humanizer-comment.md
+      - name: Add review to Actions summary
+        if: steps.trusted.outputs.ready == 'true'
+        run: cat /tmp/humanizer-comment.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Update PR review comment
+        if: >
+          steps.trusted.outputs.ready == 'true' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.actor != 'dependabot[bot]'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          REPORT_PATH: /tmp/humanizer-comment.md
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
+            const marker = '<!-- svesnost-humanizer-review -->';
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = comments.find(comment => comment.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
