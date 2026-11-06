@@ -3,12 +3,11 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "engines": {
-    "node": ">=24"
-  },
+  "engines": { "node": ">=24" },
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
+    "test:i18n": "node scripts/check-i18n.mjs",
     "preview": "astro preview"
   },
   "dependencies": {
