@@ -46,6 +46,7 @@ test('mobile popover retains Escape and contains compact preferences', async ({ 
 
 test('desktop three-position theme switch works with keyboard', async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== 'desktop');
+  await page.emulateMedia({ colorScheme: 'dark' });
   await page.goto('/en/');
   const theme = page.locator('.right-group [data-sves-theme-slider]');
   await expect(theme).toBeVisible();
@@ -53,6 +54,19 @@ test('desktop three-position theme switch works with keyboard', async ({ page },
   await theme.press('End');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(theme).toHaveAttribute('aria-valuenow', '2');
+  await theme.press('ArrowDown');
+  await expect(theme).toHaveAttribute('aria-valuenow', '1');
+  await expect(theme).toHaveAttribute('data-theme-mode', 'auto');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await theme.press('ArrowDown');
+  await expect(theme).toHaveAttribute('aria-valuenow', '0');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await theme.press('ArrowUp');
+  await expect(theme).toHaveAttribute('aria-valuenow', '1');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await theme.press('ArrowUp');
+  await expect(theme).toHaveAttribute('aria-valuenow', '2');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await theme.press('Home');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   // Synthetic keyboard clicks must not jump to the first slider position.
@@ -69,10 +83,18 @@ test('desktop sidebar and ToC can be hidden independently and restored', async (
   const toc = page.locator('button.panel-toggle[data-panel-toggle="toc"]');
   await expect(sidebar).toBeVisible();
   await expect(toc).toBeVisible();
+  // A changing action label must not expose the ARIA toggle-button pressed state.
+  await expect(sidebar).toHaveAttribute('aria-label', 'Сакриј бочни мени');
+  await expect(toc).toHaveAttribute('aria-label', 'Сакриј садржај');
+  await expect(sidebar).not.toHaveAttribute('aria-pressed', /.+/);
+  await expect(toc).not.toHaveAttribute('aria-pressed', /.+/);
   const pane = page.locator('.main-pane');
   const initialWidth = await pane.evaluate((element) => element.getBoundingClientRect().width);
   await sidebar.click();
   await expect(page.locator('html')).toHaveClass(/sves-hide-sidebar/);
+  await expect(sidebar).toHaveAttribute('aria-label', 'Прикажи бочни мени');
+  await expect(sidebar).toHaveAttribute('data-panel-hidden', 'true');
+  await expect(sidebar).not.toHaveAttribute('aria-pressed', /.+/);
   await expect.poll(() => pane.evaluate((element) => element.getBoundingClientRect().width))
     .toBeGreaterThan(initialWidth + 20);
   await page.reload();
@@ -80,6 +102,8 @@ test('desktop sidebar and ToC can be hidden independently and restored', async (
   const sidebarHiddenWidth = await pane.evaluate((element) => element.getBoundingClientRect().width);
   await toc.click();
   await expect(page.locator('html')).toHaveClass(/sves-hide-toc/);
+  await expect(toc).toHaveAttribute('aria-label', 'Прикажи садржај');
+  await expect(toc).not.toHaveAttribute('aria-pressed', /.+/);
   await expect(page.locator('.right-sidebar-container')).toBeHidden();
   await expect.poll(() => pane.evaluate((element) => element.getBoundingClientRect().width))
     .toBeGreaterThan(sidebarHiddenWidth + 20);
@@ -87,8 +111,11 @@ test('desktop sidebar and ToC can be hidden independently and restored', async (
   await expect(page.locator('html')).toHaveClass(/sves-hide-toc/);
   const restore = page.locator('button.toc-restore');
   await expect(restore).toBeVisible();
+  await expect(restore).toHaveAttribute('aria-label', 'Прикажи садржај');
+  await expect(restore).not.toHaveAttribute('aria-pressed', /.+/);
   await restore.click();
   await expect(page.locator('html')).not.toHaveClass(/sves-hide-toc/);
+  await expect(toc).toHaveAttribute('aria-label', 'Сакриј садржај');
   await expect(page.locator('html')).toHaveClass(/sves-hide-sidebar/);
 });
 
