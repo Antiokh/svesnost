@@ -13,17 +13,28 @@ const order = ['events', 'people', 'relations', 'places', 'sources', 'evidence',
 const arranged = order.map((key)=>({key,items:byKey(key)}))
   .filter((s)=>s.items.length)
   .map((s)=>({...s,items:s.key==='events'?[...s.items].sort(sortEventRows):s.items}));
+// This is deliberately a GLOBAL map: static list and pins are never filtered differently.
 const view = (locale==='sr' ? '/' : `/${locale}/`) + 'events/map/';
 const hasGeoEvents = item?.entity === 'place' && Boolean(item.geo) && byKey('events').length
   || item?.entity === 'event' && byKey('places').some((r)=>Boolean(r.geo))
   || item?.entity === 'person' && byKey('events').some((event) =>
     (event.places??[]).some((place)=>Boolean(page && page.sections.some((s)=>s.key==='places'&&s.items.some((p)=>p.id===place&&p.geo)))));
-function relationDescription(target) {
-  if (item?.entity !== 'person') return '';
-  const outward = (item.relations ?? []).find((rel)=>rel.target === target.id);
-  if (outward) return ['→ ' + outward.kind, outward.role, outward.assessment].filter(Boolean).join(' · ');
-  const inward = (target.relations ?? []).find((rel)=>rel.target === item.id);
-  return inward ? ['← ' + inward.kind, inward.role, inward.assessment].filter(Boolean).join(' · ') : '';
+// Display EVERY authored edge separately: a pair of people can have multiple
+// relations with different sources, dates and interpretations.
+const recordById = new Map((page?.records ?? []).map((record) => [record.id, record]));
+function relationEdges(target) {
+  if (item?.entity !== 'person') return [];
+  return [
+    ...(item.relations ?? []).filter((rel) => rel.target === target.id)
+      .map((rel) => ({ ...rel, direction: 'out' })),
+    ...(target.relations ?? []).filter((rel) => rel.target === item.id)
+      .map((rel) => ({ ...rel, direction: 'in' })),
+  ];
+}
+function citationRefs(refs) {
+  // A reference may exist in the canonical catalog but lack a translation.
+  // Show its stable ID as text, never invent a localized URL.
+  return (refs ?? []).map((id) => ({ id, entry: recordById.get(id) }));
 }
 ---
 {item && arranged.map((section)=> (
@@ -36,9 +47,42 @@ function relationDescription(target) {
           {section.key==='events' && linked.date && (
             <time class="entity-detail">{formatEntityDate(linked.date,locale)}{linked.endDate ? ' — '+formatEntityDate(linked.endDate,locale) : ''}</time>
           )}
-          {section.key==='relations' && relationDescription(linked) && (
-            <span class="entity-detail">{relationDescription(linked)}</span>
-          )}
+          {section.key==='relations' && relationEdges(linked).map((edge) => (
+            <div class="entity-relation" data-relation-edge={edge.direction} data-relation-kind={edge.kind}>
+              <span class="entity-detail">
+                {edge.direction === 'out' ? '→ ' : '← '}
+                {edge.kind}
+                {edge.role ? ' · ' + edge.role : ''}
+                {edge.assessment ? ' · ' + edge.assessment : ''}
+              </span>
+              {(edge.sourceRefs?.length || edge.evidenceRefs?.length) && (
+                <div class="entity-relation-references">
+                  {(edge.sourceRefs?.length ?? 0) > 0 && (
+                    <span class="entity-relation-ref-group" data-relation-sources>
+                      {words.sources}: {' '}
+                      {citationRefs(edge.sourceRefs).map(({id,entry},i) => (
+                        <>
+                          {i > 0 && ', '}
+                          {entry ? <a href={entry.url}>{entry.title}</a> : <code title={id}>{id}</code>}
+                        </>
+                      ))}
+                    </span>
+                  )}
+                  {(edge.evidenceRefs?.length ?? 0) > 0 && (
+                    <span class="entity-relation-ref-group" data-relation-evidence>
+                      {words.evidence}: {' '}
+                      {citationRefs(edge.evidenceRefs).map(({id,entry},i) => (
+                        <>
+                          {i > 0 && ', '}
+                          {entry ? <a href={entry.url}>{entry.title}</a> : <code title={id}>{id}</code>}
+                        </>
+                      ))}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
           {section.key!=='events' && section.key!=='relations' && detail(linked) && <span class="entity-detail">{detail(linked)}</span>}
           {section.key==='events' && (linked.summary || linked.description) && <p>{linked.summary || linked.description}</p>}
           {section.key==='evidence' && linked.claim && <p>{linked.claim}</p>}
@@ -50,7 +94,7 @@ function relationDescription(target) {
 ))}
 {item && hasGeoEvents && (
   <p class="entity-map-link">
-    <a href={view + (item.entity==='person' ? '?person='+encodeURIComponent(item.id) : '')}>{words.map}</a>
+    <a href={view}>{words.map}</a>
   </p>
 )}
 <style>
@@ -61,5 +105,10 @@ function relationDescription(target) {
   .entity-chronology > li:last-child { border-bottom: none; }
   .entity-linked-items p { margin-block: 0.3rem; color: var(--sl-color-gray-2); font-size: var(--sl-text-sm); }
   .entity-detail { margin-inline-start: 0.6rem; font-size: var(--sl-text-sm); color: var(--sl-color-gray-3); }
+  .entity-relation { margin-block: 0.35rem 0.8rem; }
+  .entity-relation-references { margin-inline-start: 0.6rem; font-size: var(--sl-text-sm); color: var(--sl-color-gray-3); }
+  .entity-relation-ref-group { display: block; margin-block: 0.2rem; }
+  .entity-relation-ref-group a { overflow-wrap: anywhere; }
+  .entity-relation-ref-group code { overflow-wrap: anywhere; }
   .entity-map-link { margin-block-start: 1.5rem; font-size: var(--sl-text-sm); }
 </style>

@@ -6,5 +6,6 @@ const showSections = Boolean(route.entry.data.entityId && ['person','event','pla
 ---
 <DefaultMarkdownContent>
   <slot />
+  {route.entry.data.entityId && <span hidden data-entity-id={route.entry.data.entityId}></span>}
   {showSections && <EntitySections />}
 </DefaultMarkdownContent>

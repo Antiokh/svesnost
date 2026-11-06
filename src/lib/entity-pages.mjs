@@ -42,5 +42,5 @@ export function getEntityPageData(route) {
   // An explicit source list is available on any structured page.
   if (item.sourceRefs?.length) sectionRefs.sources = item.sourceRefs;
   const sections = Object.entries(sectionRefs).map(([key, refs])=>({key,items:from(refs)})).filter((s)=>s.items.length);
-  return {item,locale,sections};
+  return {item,locale,sections,records:current.records};
 }

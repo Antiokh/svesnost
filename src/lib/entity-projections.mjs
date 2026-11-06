@@ -6,7 +6,8 @@ import { validateEntityCatalog } from './entity-catalog.mjs';
 
 export const localeFor = (id) => id.startsWith('ru/') ? 'ru' : id.startsWith('en/') ? 'en' : 'sr';
 export function pathForId(id) {
-  const parts = id.replace(/\/index$/, '').replace(/^index$/, '').replace(/^\/+|\/+$/g, '');
+  // id is the canonical Astro/Starlight docsLoader entry ID, including custom slug.
+  const parts = id.replace(/\/index$/, '').replace(/^index$/, '').replace(/^\/+|\/+$/g, '').normalize();
   return '/' + (parts ? parts + '/' : '');
 }
 export function dateSortKey(value) {

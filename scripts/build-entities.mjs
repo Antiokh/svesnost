@@ -1,6 +1,8 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import YAML from 'yaml';
+import { slug as githubSlug } from 'github-slugger';
+import { localeFor } from '../src/lib/entity-projections.mjs';
 import { checkMediaFile } from '../src/lib/entity-files.mjs';
 import { buildEntityProjections } from '../src/lib/entity-projections.mjs';
 
@@ -27,9 +29,24 @@ function frontmatter(content, filename) {
 const entries = [];
 for (const filename of await walk(root)) {
   const relative = path.relative(root, filename).split(path.sep).join('/');
-  const id = relative.replace(/\.mdx?$/i, '');
   const data = frontmatter(await readFile(filename, 'utf8'), filename);
   if (data.draft) continue;
+  // Mirrors Astro's glob loader generateIdDefault: explicit slug wins,
+  // otherwise GitHub-slugger normalizes EACH file path segment and strips /index.
+  const fileSlug = relative.replace(/\.mdx?$/i, '').split('/').map((part) => githubSlug(part)).join('/')
+    .replace(/\/index$/, '');
+  if (data.slug !== undefined && (typeof data.slug !== 'string' ||
+    !/^[\p{L}\p{N}_./-]+$/u.test(data.slug) || data.slug.includes('..') ||
+    data.slug.startsWith('/') || data.slug.endsWith('/') || data.slug.includes('//'))) {
+    throw new Error(filename + ': invalid custom slug');
+  }
+  const id = data.slug || fileSlug;
+  if (localeFor(id) !== localeFor(relative)) {
+    throw new Error(filename + ': custom slug crosses the source language boundary (' + id + ')');
+  }
+  if (entries.some((entry) => entry.id === id)) {
+    throw new Error(filename + ': duplicate Starlight route slug ' + id);
+  }
   if (data.entity === 'media') checkMediaFile(data.file, filename, root);
   entries.push({ id, data });
 }

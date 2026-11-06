@@ -51,9 +51,9 @@ const formatDate = (value) => typeof value==='number'?String(value):typeof value
         if (!response.ok) throw new Error('GeoJSON unavailable');
         const data = await response.json();
         const locale = root.dataset.locale;
-        const person = new URLSearchParams(location.search).get('person');
-        features = (data.features ?? []).filter((feature: any) => feature.properties.locale === locale
-          && (!person || feature.properties.participants.includes(person)));
+        // The map and its prerendered HTML list represent the same complete edition.
+        // A ?person= query cannot filter a prerendered no-JS list, so ignore it.
+        features = (data.features ?? []).filter((feature: any) => feature.properties.locale === locale);
         if (!features.length) { root.dataset.mapReady = 'empty'; continue; }
         const {default: maplibregl} = await import('maplibre-gl');
         const points = new Map<string, {coords: [number,number]; label: string; events: any[]}>();
