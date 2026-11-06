@@ -551,7 +551,41 @@ def mask_fenced_blocks(text: str, chars: list[str]) -> None:
         offset += len(line)
 
 
-def mask_indented_code_before_blocks(text: str, chars: list[str]) -> None:
+def ordinary_paragraph_continuations(text: str) -> set[int]:
+    """Offsets of indented lines continuing a paragraph without a blank line.
+
+    CommonMark treats four leading spaces as ordinary continuation text when
+    a paragraph is already open. A blank line resets this context, allowing
+    subsequent four-space lines to start an indented code block.
+    """
+    offsets: set[int] = set()
+    paragraph_open = False
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        indent = len(line) - len(line.lstrip(" "))
+        _, quote_depth = _unquote_line(line)
+        if not stripped or quote_depth:
+            paragraph_open = False
+        elif indent >= 4:
+            if paragraph_open:
+                offsets.add(offset)
+            else:
+                paragraph_open = False
+        else:
+            paragraph_open = not bool(re.match(
+                r"^ {0,3}(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|"
+                r"[" + chr(96) + r"~]{3,}|"
+                r"<(?:/?[A-Za-z]|!--)|\[\^[^\]]+\]:|"
+                r"(?:import|export)\s+|(?:---|\*\*\*|___)\s*$)",
+                line
+            ))
+        offset += len(line)
+    return offsets
+
+
+def mask_indented_code_before_blocks(text: str, chars: list[str],
+                                     paragraph_lines: set[int]) -> None:
     """Hide indented code before detecting ESM declarations or HTML raw tags.
 
     Preserve nested list prose and multiline footnote continuations. Code
@@ -601,7 +635,8 @@ def mask_indented_code_before_blocks(text: str, chars: list[str]) -> None:
             after_blank = False
         elif indent >= 4:
             if not list_indents:
-                hide(chars, offset, offset + len(line))
+                if offset not in paragraph_lines:
+                    hide(chars, offset, offset + len(line))
             elif after_blank and indent >= list_indents[-1][1] + 4:
                 list_code_indent = list_indents[-1][1] + 4
                 hide(chars, offset, offset + len(line))
@@ -799,7 +834,8 @@ def prose_only(raw: str) -> str:
     # Before detecting raw HTML and ESM, exclude indented Markdown code.
     # Otherwise an indented "<pre>" or incomplete "import {" can swallow
     # the next reader-visible paragraph. Fenced code is masked before ESM.
-    mask_indented_code_before_blocks(text, chars)
+    paragraph_lines = ordinary_paragraph_continuations(text)
+    mask_indented_code_before_blocks(text, chars, paragraph_lines)
     mask_raw_elements_before_blocks(text, chars)
     mask_fenced_blocks(text, chars)
     mask_mdx_esm(text, chars)
@@ -870,7 +906,8 @@ def prose_only(raw: str) -> str:
                 after_blank = False
             elif indent >= 4:
                 if not list_indents:
-                    hide(chars, offset, offset + len(line))
+                    if offset not in paragraph_lines:
+                        hide(chars, offset, offset + len(line))
                 elif after_blank and indent >= list_indents[-1][1] + 4:
                     list_code_indent = list_indents[-1][1] + 4
                     list_code_line = True
