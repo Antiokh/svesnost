@@ -141,15 +141,12 @@ def end_brace(text: str, start: int) -> int:
 def end_tag(text: str, start: int) -> int:
     pos = start + 1
     quote = ""
-    escaped = False
     while pos < len(text):
         char = text[pos]
         if quote:
-            if escaped:
-                escaped = False
-            elif char == "\\":
-                escaped = True
-            elif char == quote:
+            # HTML/JSX quoted attributes do not use backslashes to escape
+            # a closing quote; only JS expressions inside {...} do.
+            if char == quote:
                 quote = ""
         elif char in ("'", '"', chr(96)):
             quote = char
@@ -227,6 +224,11 @@ def _fence_line(line: str, list_indents: list[tuple[int, int]]) -> tuple[str, in
     four-space indentation within a Markdown list is valid fence syntax.
     """
     visible, quote_depth = _unquote_line(line)
+    # A fence may start immediately after a list marker: "- ~~~js" or
+    # "1. " followed by a code fence, including inside a blockquote.
+    listed_fence = re.match(r"^ {0,3}(?:[-*+]|\d+[.)])[ \t]+(?=`{3,}|~{3,})", visible)
+    if listed_fence:
+        return visible[listed_fence.end():], quote_depth
     if quote_depth:
         return visible, quote_depth
     indent = len(line) - len(line.lstrip(" "))
@@ -763,6 +765,10 @@ def mask_fenced_blocks(text: str, chars: list[str]) -> None:
                 list_indents.clear()
         fence_text, quote_depth = _fence_line(line, list_indents)
         fence = FENCE.match(fence_text)
+        # An unclosed fence nested in a blockquote ends with that quote;
+        # it must not mask the following unquoted article paragraph.
+        if in_fence and quote_depth < in_fence[2]:
+            in_fence = None
         if in_fence:
             hide(chars, offset, offset + len(line))
             if (quote_depth == in_fence[2] and fence
@@ -954,6 +960,11 @@ def mask_mdx_esm(text: str, chars: list[str]) -> None:
                 continue
             elif char in ("'", '"', chr(96)):
                 quote = char
+            elif char == "/":
+                regex_end = skip_js_regex(line, i)
+                if regex_end is not None:
+                    i = regex_end
+                    continue
             elif char in "([{":
                 stack.append({"(": ")", "[": "]", "{": "}"}[char])
             elif char in ")]}" and stack and char == stack[-1]:
@@ -1202,6 +1213,8 @@ def prose_only(raw: str) -> str:
             math_text = math_text[math_list.end():]
         # The active block wins. A math delimiter inside fenced code is code,
         # and a code fence inside a math block must not affect block state.
+        if in_fence and quote_depth < in_fence[2]:
+            in_fence = None
         if in_fence:
             hide(chars, offset, offset + len(line))
             if (quote_depth == in_fence[2] and fence
@@ -1338,7 +1351,9 @@ def load_module(root: Path, module_path: str, module_name: str):
 
 
 def normalized(text: object) -> str:
-    return re.sub(r"\s+", " ", str(text or "")).casefold()[:180]
+    # Compare the full excerpt: a changed ending beyond 180 characters is
+    # still a new editorial finding, not a duplicate of the old text.
+    return re.sub(r"\s+", " ", str(text or "")).casefold()
 
 
 def russian_new(module, base: str, head: str) -> list[dict]:
