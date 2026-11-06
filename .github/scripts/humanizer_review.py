@@ -647,6 +647,23 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         assert "Обычный текст после кода." in after_fence, after_fence
         assert "не закрыто" not in after_fence, after_fence
 
+    # Fenced code inside blockquotes (including nested quotes) and Markdown
+    # list items must be hidden as code, with following prose still visible.
+    nested_fences = (
+        ("> ~~~js\n> const secret = 'КОД В ЦИТАТЕ';\n> ~~~\n"
+         "Обычная проза после цитаты.\n", "Обычная проза после цитаты"),
+        ("> > ~~~js\n> > const secret = 'КОД ВО ВЛОЖЕННОЙ ЦИТАТЕ';\n"
+         "> > ~~~\nОбычная проза после вложенной цитаты.\n",
+         "Обычная проза после вложенной цитаты"),
+        ("- Видимый пункт списка\n    ~~~js\n    const secret = 'КОД В СПИСКЕ';\n"
+         "    ~~~\nОбычная проза после списка.\n", "Обычная проза после списка"),
+    )
+    for sample, expected_prose in nested_fences:
+        extracted = prose_only(sample)
+        assert expected_prose in extracted, ("prose lost after nested fence", extracted)
+        assert "const secret" not in extracted and "КОД В" not in extracted, extracted
+    assert "Видимый пункт списка" in prose_only(nested_fences[2][0])
+
     # Reference-style Markdown links: keep reader-visible label only.
     reference = (
         "Читайте [проверенную публикацию][source] и [документ][].\n"
@@ -684,6 +701,20 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "До таблицы" in borderless_result and "После таблицы" in borderless_result
     assert "Мария" not in borderless_result and "900" not in borderless_result
     assert "Обычная проза" in prose_only("Обычная проза А | Б без таблицы.")
+    quoted_table = (
+        "Обычная проза до цитаты.\n"
+        "> | Участник | Сумма |\n"
+        "> | --- | --- |\n"
+        "> | Иван | 1000 |\n"
+        "> Видимая проза после таблицы внутри цитаты.\n"
+        "Обычная проза после цитаты.\n"
+    )
+    quoted_prose = prose_only(quoted_table)
+    for visible in ("Обычная проза до цитаты", "Видимая проза после таблицы",
+                    "Обычная проза после цитаты"):
+        assert visible in quoted_prose, ("prose lost near quoted table", visible, quoted_prose)
+    for hidden in ("Участник", "Сумма", "Иван", "1000"):
+        assert hidden not in quoted_prose, ("quoted GFM table leaked", hidden, quoted_prose)
 
     # Pipes inside Markdown code spans and escaped pipes are not table columns.
     ticks = chr(96)
@@ -752,6 +783,17 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "$E = mc^2$" not in prose_only("Формула $E = mc^2$ описана словами.")
     escaped_math = prose_only(r"Оставить литерал \$E=mc^2\$ как текст.")
     assert "E=mc^2" in escaped_math, ("escaped math incorrectly masked", escaped_math)
+    # Price ranges and successive prices are prose, not mathematical pairs.
+    monetary_examples = (
+        ("Стоимость $100–$200.", ("$100", "$200")),
+        ("Цена $5/$10 за набор.", ("$5", "$10")),
+        ("Стоимость $100 - $200.", ("$100", "$200")),
+    )
+    for original, amounts in monetary_examples:
+        extracted = prose_only(original)
+        for amount in amounts:
+            assert amount in extracted, ("currency masked as math", original, extracted)
+    assert "2+2" not in prose_only("Математика $2+2$ остаётся формулой.")
 
     # Serbian findings are subtracted by evidence multiset, not by total rule count.
     from types import SimpleNamespace
