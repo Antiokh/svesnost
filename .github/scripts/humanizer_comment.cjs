@@ -10,4 +10,13 @@ function findOwnedReviewComment(comments, marker) {
   );
 }
 
-module.exports = { findOwnedReviewComment };
+/** Refuse an obsolete synchronize run that outlived its cancellation. */
+function isCurrentReviewHead(eventHead, currentHead) {
+  return (
+    typeof eventHead === "string" &&
+    eventHead.length > 0 &&
+    eventHead === currentHead
+  );
+}
+
+module.exports = { findOwnedReviewComment, isCurrentReviewHead };
