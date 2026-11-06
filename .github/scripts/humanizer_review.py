@@ -122,9 +122,9 @@ def prose_only(raw: str) -> str:
             hide(chars, offset, offset + len(line))
             if in_math in line:
                 in_math = None
-        elif trimmed.startswith(("$", "\[")):
+        elif trimmed.startswith((chr(36) * 2, r"\[")):
             hide(chars, offset, offset + len(line))
-            closing = "$" if trimmed.startswith("$") else "\]"
+            closing = chr(36) * 2 if trimmed.startswith(chr(36) * 2) else r"\]"
             if closing not in trimmed[2:]:
                 in_math = closing
         elif in_fence:
@@ -362,11 +362,11 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert language(DOCS + "story.mdx") == "sr"
     assert language("docs/story.md") is None
     assert prose_only("---\ntitle: private\n") == ""
-    special = "Проза до формулы.\n---\n:::note\nСодержимое примечания — это проза.\n:::\n$\nx^2 + 1\n$\nИ проза после.\n"
+    special = "Проза до формулы.\n---\n:::note\nСодержимое примечания — это проза.\n:::\n@MATH@\nx^2 + 1\n@MATH@\nИ проза после.\n".replace("@MATH@", chr(36) * 2).replace("@MATH@", chr(36) * 2)
     isolated = prose_only(special)
     assert "Проза до формулы." in isolated and "Содержимое примечания" in isolated
     assert "И проза после." in isolated and "x^2" not in isolated
-    assert "---" not in isolated and ":::note" not in isolated and "$" not in isolated
+    assert "---" not in isolated and ":::note" not in isolated and chr(36) * 2 not in isolated
     return {"result": "OK", "frontmatter": "excluded", "mdx_jsx": "excluded",
             "readable_prose": "retained", "languages": ["ru", "sr"]}
 
