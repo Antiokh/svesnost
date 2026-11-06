@@ -790,7 +790,8 @@ def mask_mdx_esm(text: str, chars: list[str]) -> None:
     quote = ""
     block_comment = False
     offset = 0
-    for line in "".join(chars).splitlines(keepends=True):
+    lines = "".join(chars).splitlines(keepends=True)
+    for line_index, line in enumerate(lines):
         if not active:
             if not MODULE.match(line):
                 offset += len(line)
@@ -827,6 +828,14 @@ def mask_mdx_esm(text: str, chars: list[str]) -> None:
         trimmed = line.rstrip()
         continued = (trimmed.endswith(("=", "=>", ",", ".", "\\", "(", "[", "{"))
                      or bool(re.search(r"\b(?:from|as|default)\s*$", trimmed)))
+        # 'import Widget\nfrom "./Widget.jsx"' and
+        # 'export { Widget }\nfrom "./Widget.jsx"' are valid module
+        # declarations. A balanced first line does not finish the statement
+        # when the next line supplies its from-clause.
+        if (not continued and line_index + 1 < len(lines)
+                and re.match(r"^[ \t]*from[ \t]+", lines[line_index + 1])
+                and re.match(r"^[ \t]*(?:import|export)\b", line)):
+            continued = True
         if not stack and not quote and not block_comment and not continued:
             active = False
         offset += len(line)
