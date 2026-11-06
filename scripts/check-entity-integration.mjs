@@ -113,6 +113,7 @@ import EmbedFrame from '../../../../components/EmbedFrame.astro';
 `],
   ['ru/people/fixture-actor/index.md',`---
 title: Фиктивная личность А
+slug: ru/people/fixture-alternate
 entity: person
 entityId: person:fixture-a
 relations:
@@ -176,7 +177,10 @@ try {
   assert.match(event,/data-entity-section="people"/);
   assert.match(event,/data-entity-section="places"/);
   assert.match(event,/data-entity-section="evidence"/);
-  const ru=read('/ru/people/fixture-actor/');
+  const ru=read('/ru/people/fixture-alternate/');
+  assert.equal(existsSync(path.resolve('dist/ru/people/fixture-actor/index.html')),false);
+  assert.match(person,/href="\/ru\/people\/fixture-alternate\/"[^>]+data-language-target="ru"/);
+  assert.match(ru,/href="\/people\/fixture-actor\/"[^>]+data-language-target="root"/);
   assert.doesNotMatch(ru,/data-entity-section="events"/);
   assert.match(ru,/data-relation-sources[\s\S]*?source:fixture-publication/);
   assert.doesNotMatch(ru,/href="\/sources\/fixture-publication\/"/,
@@ -208,7 +212,7 @@ try {
 
   const markers = ['person:fixture-a','person:fixture-b','event:fixture-conference',
     'place:fixture-city','source:fixture-publication','evidence:fixture-claim',
-    'media:fixture-note','fixture-actor','fixture-peer','fixture-renamed-conference',
+    'media:fixture-note','fixture-actor','fixture-peer','fixture-alternate','fixture-renamed-conference',
     'Измишљена конференција'];
   const checkOutput = (directory) => {
     for(const item of readdirSync(directory,{withFileTypes:true})) {
@@ -224,6 +228,7 @@ try {
   checkOutput(path.resolve('dist'));
   checkOutput(path.resolve('public/generated'));
   assert.equal(existsSync(path.resolve('dist/people/fixture-actor')),false);
+  assert.equal(existsSync(path.resolve('dist/ru/people/fixture-alternate')),false);
   assert.equal(existsSync(path.resolve('dist/events/fixture-renamed-conference')),false);
   console.log('Synthetic fixtures removed; clean dist and public/generated verified.');
 }
