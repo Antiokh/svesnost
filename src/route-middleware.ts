@@ -4,14 +4,14 @@ import { defineRouteMiddleware } from '@astrojs/starlight/route-data';
 /** Routes belonging to real authored pages, never Starlight's generated fallbacks. */
 const published = new Set(
   (await getCollection('docs', ({ data }) => !data.draft)).map(({ id }) => {
-    const path = id === 'index' ? '' : id.replace(/\\/g, '/');
-    return path ? '/' + path.replace(/^\\/g, '').replace(/\\/$/, '') + '/' : '/';
+    const path = id === 'index' ? '' : id;
+    return path ? '/' + path + '/' : '/';
   }),
 );
 
 const normalize = (url: string) => {
   const pathname = new URL(url, 'https://svesnost.invalid').pathname;
-  return pathname === '/' ? '/' : pathname.replace(/\\/$/, '') + '/';
+  return pathname.endsWith('/') ? pathname : pathname + '/';
 };
 
 type NavEntry = {
