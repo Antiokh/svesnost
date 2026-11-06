@@ -1018,6 +1018,21 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "Вводный текст" in img and "конец" in img, img
     assert "СЕКРЕТНЫЙ" not in img and "example.org" not in img, img
 
+    # Clickable images are nested inside link labels; the image alt is still
+    # non-prose even though the outer link is reader-visible.
+    clickable_image = (
+        "Проза до изображения. "
+        "[![НЕ ПОСЫЛАТЬ ALT](https://example.org/image.png)]"
+        "(https://example.org/page) "
+        "Проза после изображения."
+    )
+    clickable_body = prose_only(clickable_image)
+    for allowed_text in ("Проза до изображения", "Проза после изображения"):
+        assert allowed_text in clickable_body, (allowed_text, clickable_body)
+    for hidden_text in ("НЕ ПОСЫЛАТЬ ALT", "example.org", "image.png"):
+        assert hidden_text not in clickable_body, (hidden_text, clickable_body)
+    assert len(markdown_inline_links("[![alt](src)](href)")) == 2
+
     # An escaped Markdown literal \\( is not a TeX opener. It must not pair
     # with the closing delimiter of a later, real inline formula.
     quoted_tex = r"До \\( буквально. Важная проза после литерала. \(x+1\) Конец."
@@ -1032,6 +1047,30 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert language(DOCS + "story.mdx") == "sr"
     assert language("docs/story.md") is None
     assert prose_only("---\ntitle: private\n") == ""
+
+    # Multi-line MDX ESM declarations are not Markdown prose. Their nested
+    # object keys and import specifiers must be hidden through the closing
+    # brace/semicolon; ordinary paragraphs after them remain visible.
+    mdx_modules = (
+        "Проза перед экспортом.\n"
+        "export const meta = {\n"
+        '  title: "СЛУЖЕБНОЕ ПОЛЕ",\n'
+        "  nested: { label: 'СЕКРЕТ ЭКСПОРТА' },\n"
+        "};\n"
+        "\n"
+        "Видимый абзац после экспорта.\n"
+        "import {\n"
+        "  identifier as СЕКРЕТ_ИМПОРТА,\n"
+        "} from './module.js';\n"
+        "Обычный текст после импорта.\n"
+    )
+    modules_body = prose_only(mdx_modules)
+    for visible_text in ("Проза перед экспортом", "Видимый абзац после экспорта",
+                         "Обычный текст после импорта"):
+        assert visible_text in modules_body, ("ESM swallowed prose", visible_text, modules_body)
+    for hidden_text in ("СЛУЖЕБНОЕ ПОЛЕ", "СЕКРЕТ ЭКСПОРТА",
+                        "СЕКРЕТ_ИМПОРТА", "module.js"):
+        assert hidden_text not in modules_body, ("ESM leaked into prose", hidden_text, modules_body)
 
     # Indented YAML block scalar delimiters are data, not closing frontmatter.
     # Only a column-zero delimiter ends the metadata section.
@@ -1121,6 +1160,37 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     )
     extracted = prose_only(in_code)
     assert "Проза после блока." in extracted, extracted
+
+    # Raw MDX/HTML code containers must be hidden before the Markdown block
+    # scanner: internal ~~~ and $ cannot hide following reader-visible prose.
+    raw_blocks = (
+        ("pre", "~~~", "СЕКРЕТ В PRE"),
+        ("pre", "$", "СЕКРЕТ МАТЕМАТИКИ В PRE"),
+        ("CodeBlock", "~~~js", "СЕКРЕТ В CODEBLOCK"),
+        ("CodeBlock", "$", "СЕКРЕТ В CODEBLOCK MATH"),
+    )
+    for tag, marker_line, secret in raw_blocks:
+        sample = (
+            "Проза перед raw-блоком.\n"
+            f"<{tag}>\n"
+            + marker_line + "\n"
+            + secret + "\n"
+            + f"</{tag}>\n"
+            + "Обычный читательский абзац после блока.\n"
+        )
+        extracted = prose_only(sample)
+        for wanted in ("Проза перед raw-блоком", "Обычный читательский абзац после блока"):
+            assert wanted in extracted, ("raw block swallowed prose", tag, extracted)
+        assert secret not in extracted, ("raw code leaked", tag, extracted)
+    # A literal raw-looking tag inside fenced code is not an opening MDX tag.
+    fenced_raw_literal = (
+        "Текст до кода.\n"
+        "~~~html\n"
+        "<pre>\n"
+        "~~~\n"
+        "Текст после кода.\n"
+    )
+    assert "Текст после кода." in prose_only(fenced_raw_literal)
 
     # Escaped Markdown delimiters remain readable: neither \{ nor \<!--
     # may start an MDX expression or HTML comment that eats later paragraphs.
