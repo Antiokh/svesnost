@@ -2548,6 +2548,81 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert len(repeated) == 1 and repeated[0]["count"] == 1, repeated
     assert repeated[0]["evidence"] == ["Исти образац"], repeated
 
+    # Regression coverage for the later CodeRabbit review: fixed and fenced
+    # block boundaries, HTML attributes and JS RegExp in an ESM statement.
+    backslash_attr = '<Aside title="literal\\">Видимый текст.</Aside>\nСледующий абзац.'
+    backslash_prose = prose_only(backslash_attr)
+    assert "Видимый текст." in backslash_prose, backslash_prose
+    assert "Следующий абзац." in backslash_prose, backslash_prose
+
+    for fenced_sample, hidden, visible in (
+        ("- ~~~js\n  СЛУЖЕБНЫЙ КОД\n  ~~~\nПосле списка.\n",
+         "СЛУЖЕБНЫЙ КОД", "После списка."),
+        ("> ~~~js\n> СКРЫТЫЙ КОД\nПосле цитаты.\n",
+         "СКРЫТЫЙ КОД", "После цитаты."),
+    ):
+        extracted = prose_only(fenced_sample)
+        assert hidden not in extracted, (hidden, extracted)
+        assert visible in extracted, (visible, extracted)
+
+    assert markdown_inline_links("[" * 10000) == []
+    assert len(markdown_bracket_pairs("[![alt](src)](href)")) == 2
+
+    for js_regex in (r"/[{]/", r"/[}]/"):
+        regex_esm = (
+            "export const expression = " + js_regex + ";\n\n"
+            "Видимый абзац после regex ESM."
+        )
+        result = prose_only(regex_esm)
+        assert "Видимый абзац после regex ESM" in result, result
+        assert "expression" not in result, result
+
+    invalid_ref = (
+        "[Пояснение]: это не ссылка, а важный текст.\n"
+        "\n"
+        "![Пояснение]\n"
+    )
+    invalid_prose = prose_only(invalid_ref)
+    assert "важный текст" in invalid_prose, invalid_prose
+    assert "Пояснение" in invalid_prose, invalid_prose
+
+    literal_ticks = (
+        "Пишите " + "\\" + chr(96) + "важные слова"
+        + "\\" + chr(96) + " буквально."
+    )
+    assert "важные слова" in prose_only(literal_ticks)
+    unmatched_ticks = "Начало " + chr(96) + "важные слова" + chr(96) * 2 + " конец."
+    assert "важные слова" in prose_only(unmatched_ticks)
+
+    math_with_fence = (
+        "Проза до формулы.\n"
+        + chr(36) * 2 + "\n"
+        + "~~~\n"
+        + "СКРЫТАЯ МАТЕМАТИКА\n"
+        + chr(36) * 2 + "\n"
+        + "Видимый абзац после формулы.\n"
+    )
+    math_prose = prose_only(math_with_fence)
+    assert "СКРЫТАЯ МАТЕМАТИКА" not in math_prose, math_prose
+    assert "Видимый абзац после формулы" in math_prose, math_prose
+
+    lengthy = "Повторение фрагмента " * 15
+    from types import SimpleNamespace
+    def russian_excerpt_mock(text: str, **kwargs):
+        return {"findings": [{
+            "library_id": "test", "rule_id": "test_signal",
+            "phenomenon_id": "test", "verdict": "note",
+            "excerpt": lengthy + ("СТАРЫЙ" if text == "before" else "НОВЫЙ"),
+        }]}
+    assert len(russian_new(
+        SimpleNamespace(run_review=russian_excerpt_mock), "before", "after"
+    )) == 1
+
+    huge_report = MARKER + "\n" + ("ТЕКСТ ОТЧЁТА\n" * 10000)
+    shortened = limit_report_size(huge_report, 1024)
+    assert len(shortened.encode("utf-8")) <= 1024
+    assert "часть замечаний не показана" in shortened
+
     return {"result": "OK", "frontmatter": "excluded", "mdx_jsx": "excluded",
             "gfm_tables": "excluded", "nested_list_prose": "retained",
             "inline_math": "excluded", "serbian_evidence_delta": "verified",
