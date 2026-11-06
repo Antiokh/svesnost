@@ -1,0 +1,44 @@
+---
+// RSLive YouTube contract adapted without its design:
+// privacy=true -> youtube-nocookie, lazy iframe, start, direct watch fallback.
+import EmbedFrame from './EmbedFrame.astro';
+interface Props {
+  id?: string;
+  src?: string;
+  title?: string;
+  size?: 'small' | 'default' | 'full';
+  start?: number | string;
+  privacy?: boolean;
+  caption?: string;
+}
+const {id,src,size='default',start,privacy=true,caption} = Astro.props;
+const title = Astro.props.title ?? (Astro.url.pathname.startsWith('/ru/') ? 'Видео YouTube'
+  : Astro.url.pathname.startsWith('/en/') ? 'YouTube video' : 'YouTube видео');
+function videoId(input?: string): string {
+  if (!input) throw new Error('YouTube requires an id or src');
+  if (/^[A-Za-z0-9_-]{11}$/.test(input)) return input;
+  const url = new URL(input);
+  const host = url.hostname.replace(/^www\./,'');
+  if (host === 'youtu.be') return url.pathname.slice(1).split('/')[0];
+  if (!['youtube.com','m.youtube.com','youtube-nocookie.com'].includes(host)) {
+    throw new Error('YouTube src is not a recognized YouTube domain');
+  }
+  return url.pathname.startsWith('/embed/') || url.pathname.startsWith('/shorts/')
+    ? url.pathname.split('/')[2] : url.searchParams.get('v') ?? '';
+}
+const idValue = videoId(id || src);
+if (!/^[A-Za-z0-9_-]{11}$/.test(idValue)) throw new Error('Invalid YouTube video ID');
+const seconds = start === undefined ? 0 : Number(start);
+if (!Number.isSafeInteger(seconds) || seconds < 0) throw new Error('Invalid YouTube start time');
+const host = privacy ? 'https://www.youtube-nocookie.com' : 'https://www.youtube.com';
+const embed = `${host}/embed/${idValue}?rel=0${seconds ? '&start='+seconds : ''}`;
+const watch = `https://www.youtube.com/watch?v=${idValue}${seconds ? '&t='+seconds+'s' : ''}`;
+const aspect = size==='small' ? '4 / 3' : '16 / 9';
+---
+<div class:list={['sves-video',size==='small'&&'sves-video--small']}>
+  <EmbedFrame src={embed} linkHref={watch} title={title} caption={caption} aspect={aspect}
+    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"/>
+</div>
+<style>
+  .sves-video--small { max-width:32rem; }
+</style>

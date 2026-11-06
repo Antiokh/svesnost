@@ -3,15 +3,28 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "engines": { "node": ">=24" },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
-    "dev": "astro dev",
-    "build": "astro build",
+    "dev": "npm run build:data && astro dev",
+    "build": "npm run build:data && astro build && node scripts/check-entity-routes.mjs",
     "test:i18n": "node scripts/check-i18n.mjs",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "test:ui": "playwright test",
+    "test:model": "node scripts/check-entity-model.mjs",
+    "build:data": "node scripts/build-entities.mjs",
+    "test:integration": "node scripts/check-entity-integration.mjs",
+    "test:dev": "node scripts/check-entity-dev.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.42.4",
-    "astro": "^7.3.4"
+    "astro": "^7.3.4",
+    "yaml": "^2.9.1",
+    "maplibre-gl": "5.24.0",
+    "github-slugger": "2.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
   }
 }

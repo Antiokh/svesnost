@@ -1,66 +1,171 @@
 ---
 import { getCollection } from 'astro:content';
 
-const existing = new Set((await getCollection('docs', ({ data }) => !data.draft)).map(({ id }) =>
-  id === 'index' ? '' : id,
-));
-const locale = Astro.locals.starlightRoute.locale ?? 'root';
-const currentId = Astro.locals.starlightRoute.id;
+const published = await getCollection('docs', ({ data }) => !data.draft);
+const existing = new Set(published.map(({ id }) => id === 'index' ? '' : id));
+const route = Astro.locals.starlightRoute;
+const locale = route.locale ?? 'root';
+const currentId = route.id;
+const entityId = !route.isFallback ? route.entry.data.entityId : undefined;
+const entityLocales = new Map();
+if (entityId) {
+  for (const { id, data } of published) {
+    if (data.entityId !== entityId) continue;
+    const code = id === 'ru' || id.startsWith('ru/') ? 'ru'
+      : id === 'en' || id.startsWith('en/') ? 'en' : 'root';
+    entityLocales.set(code, id === 'index' ? '' : id);
+  }
+}
 const relativeSlug = locale === 'root'
   ? currentId
   : currentId === locale ? '' : currentId.slice(locale.length + 1);
 const languages = [
-  { code: 'root', prefix: '', label: 'Српски', lang: 'sr' },
-  { code: 'ru', prefix: 'ru', label: 'Русский', lang: 'ru' },
-  { code: 'en', prefix: 'en', label: 'English', lang: 'en' },
-].map(({ code, prefix, label, lang }) => {
-  const targetId = [prefix, relativeSlug].filter(Boolean).join('/');
-  const translated = existing.has(targetId);
+  { code: 'root', prefix: '', label: 'Српски', short: 'SR', lang: 'sr' },
+  { code: 'ru', prefix: 'ru', label: 'Русский', short: 'RU', lang: 'ru' },
+  { code: 'en', prefix: 'en', label: 'English', short: 'EN', lang: 'en' },
+].map(({ code, prefix, label, short, lang }) => {
+  const samePathId = [prefix, relativeSlug].filter(Boolean).join('/');
+  // Structured entities use stable identity, NOT identical translated slugs.
+  // Non-entity pages preserve the existing same-path behavior.
+  const targetId = entityId ? entityLocales.get(code) : samePathId;
+  const translated = entityId ? entityLocales.has(code) : existing.has(samePathId);
   const href = '/' + (translated ? targetId : prefix);
-  return { code, label, lang, translated, href: href === '/' ? href : href + '/' };
+  return { code, label, short, lang, translated, href: href === '/' ? href : href + '/' };
 });
+const current = languages.find(({ code }) => code === locale) ?? languages[0];
 const ariaLabel = locale === 'ru' ? 'Выбор языка' : locale === 'en' ? 'Choose language' : 'Избор језика';
+const missingLabel = locale === 'ru' ? 'Перевода нет — открыть главную'
+  : locale === 'en' ? 'No translation — open language home'
+  : 'Нема превода — отвори почетну страницу';
 ---
 
-<nav class="locale-links" aria-label={ariaLabel}>
-  {languages.map((lang) => (
-    <a
-      href={lang.href}
-      lang={lang.lang}
-      hreflang={lang.lang}
-      aria-current={lang.code === locale ? 'page' : undefined}
-      title={!lang.translated
-        ? locale === 'ru' ? 'Перевода нет — перейти на главную' : locale === 'en'
-          ? 'No translation — go to the home page' : 'Нема превода — пређи на почетну'
-        : undefined}
-    >{lang.label}</a>
-  ))}
+<nav class="language-control" aria-label={ariaLabel}>
+  <div class="language-track sl-hidden md:sl-flex" data-sves-desktop-languages>
+    {languages.map((lang) => (
+      <a href={lang.href} lang={lang.lang} hreflang={lang.lang}
+        aria-current={lang.code === locale ? 'page' : undefined}
+        title={lang.translated ? lang.label : lang.label + ' · ' + missingLabel}
+        data-language-target={lang.code}>
+        {lang.short}
+      </a>
+    ))}
+  </div>
+  {/* Native disclosure and real links work even when JavaScript is unavailable. */}
+  <details class="language-mobile md:sl-hidden" data-sves-language-mobile>
+    <summary aria-label={ariaLabel}>
+      <span aria-hidden="true">{current?.short}</span>
+      <svg aria-hidden="true" viewBox="0 0 12 12"><path d="m3 4 3 3 3-3" /></svg>
+    </summary>
+    <div class="language-menu">
+      {languages.map((lang) => (
+        <a href={lang.href} lang={lang.lang} hreflang={lang.lang}
+          aria-current={lang.code === locale ? 'page' : undefined}
+          title={lang.translated ? lang.label : lang.label + ' · ' + missingLabel}
+          data-language-target={lang.code}>
+          {lang.label}
+        </a>
+      ))}
+    </div>
+  </details>
 </nav>
 
 <style>
-  .locale-links {
+  .language-track {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 0.15rem;
-    font-size: var(--sl-text-xs);
+    gap: 1px;
+    padding: 1px;
+    background: var(--sl-color-bg);
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.7rem;
+    line-height: 1;
   }
-  .locale-links a {
+  .language-track a {
     color: var(--sl-color-gray-2);
-    border: 1px solid transparent;
-    padding: 0.35rem 0.45rem;
-    border-radius: 0.4rem;
+    font-weight: 600;
+    font-size: 0.65rem;
+    text-decoration: none;
+    border-radius: 0.6rem;
+    text-align: center;
+    padding: 0.35rem 0.32rem;
+    min-width: 1.65rem;
+  }
+  .language-track a:hover,
+  .language-track a:focus-visible { color: var(--sl-color-white); }
+  .language-track a[aria-current='page'] {
+    color: var(--sl-color-text-accent);
+    background: var(--sl-color-gray-6);
+    box-shadow: inset 0 0 0 1px var(--sl-color-gray-5);
+  }
+  .language-mobile {
+    position: relative;
+    display: inline-block;
+    flex-shrink: 0;
+    color: var(--sl-color-white);
+    font-weight: 600;
+    font-size: 0.75rem;
+  }
+  .language-mobile summary {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.55rem;
+    height: 2.5rem;
+    padding-inline: 0.25rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg-nav);
+    cursor: pointer;
+    list-style: none;
+  }
+  .language-mobile summary::-webkit-details-marker { display: none; }
+  .language-mobile summary:hover,
+  .language-mobile summary:focus-visible,
+  .language-mobile[open] summary { border-color: var(--sl-color-accent); }
+  .language-mobile svg {
+    width: 0.6rem;
+    height: 0.6rem;
+    margin-inline-start: 0.12rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+  }
+  .language-menu {
+    position: absolute;
+    z-index: 20;
+    inset-inline-end: 0;
+    top: calc(100% + 0.25rem);
+    display: flex;
+    flex-direction: column;
+    min-width: 9rem;
+    padding: 0.3rem;
+    gap: 0.1rem;
+    border: 1px solid var(--sl-color-gray-5);
+    border-radius: 0.5rem;
+    background: var(--sl-color-bg-nav);
+    box-shadow: var(--sl-shadow-md);
+  }
+  /* Footer controls sit at the bottom of Starlight's mobile sidebar. */
+  :global(.mobile-preferences) .language-menu {
+    top: auto;
+    bottom: calc(100% + 0.25rem);
+  }
+  .language-menu a {
+    display: block;
+    color: var(--sl-color-gray-2);
+    padding: 0.55rem 0.65rem;
+    border-radius: 0.3rem;
+    font-weight: 500;
     text-decoration: none;
     white-space: nowrap;
   }
-  .locale-links a:hover,
-  .locale-links a:focus-visible {
-    color: var(--sl-color-white);
-    border-color: var(--sl-color-gray-4);
+  .language-menu a:hover,
+  .language-menu a:focus-visible { color: var(--sl-color-white); background: var(--sl-color-gray-6); }
+  .language-menu a[aria-current='page'] { color: var(--sl-color-text-accent); font-weight: 700; }
+  @media (min-width: 50rem) {
+    .language-mobile { display: none; }
   }
-  .locale-links a[aria-current='page'] {
-    color: var(--sl-color-text-accent);
-    border-color: var(--sl-color-gray-4);
-    font-weight: 600;
+  @media (max-width: 49.999rem) {
+    .language-track { display: none; }
   }
 </style>
