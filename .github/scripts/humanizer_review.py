@@ -1763,6 +1763,37 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "internal.example.org" not in code_body, code_body
     assert "Обычный читательский абзац" in code_body, code_body
 
+    # Email autolinks have no URI scheme and are not HTML elements.
+    # The escaped opener is literal text; a double backslash is not escaped.
+    email_autolinks = (
+        "Контакт <editor@example.org> для связи.\n"
+        "Почта <name+tag@sub.example.co.uk> для сообщений.\n"
+        "\n"
+        "Видимый следующий абзац.\n"
+    )
+    email_body = prose_only(email_autolinks)
+    for visible in ("Контакт", "для связи", "Почта",
+                    "для сообщений", "Видимый следующий абзац"):
+        assert visible in email_body, (visible, email_body)
+    for secret in ("editor@example.org", "name+tag@sub.example.co.uk"):
+        assert secret not in email_body, (secret, email_body)
+    escaped_email = "\\<visible@example.org> и читательская проза.\n"
+    escaped_email_body = prose_only(escaped_email)
+    assert "visible@example.org" in escaped_email_body, escaped_email_body
+    assert "читательская проза" in escaped_email_body, escaped_email_body
+    even_email_escapes = "\\\\<hidden@example.org> после.\n"
+    assert "hidden@example.org" not in prose_only(even_email_escapes)
+    email_inside_code = (
+        "Читатель " + chr(96) + "<inner@example.org>" + chr(96)
+        + " продолжает текст.\n"
+        "~~~md\n<code@example.org>\n~~~\n"
+        "После примера.\n"
+    )
+    email_code_prose = prose_only(email_inside_code)
+    for secret in ("inner@example.org", "code@example.org"):
+        assert secret not in email_code_prose, (secret, email_code_prose)
+    assert "После примера." in email_code_prose, email_code_prose
+
     # An angle-bracket link destination may contain a literal unmatched ).
     # The complete destination including the technical tail must be hidden.
     for angle_link in (
@@ -2456,6 +2487,36 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         assert fragment in paragraph_prose, ("paragraph continuation lost", fragment, paragraph_prose)
     assert "СЕКРЕТНЫЙ КОД ПОСЛЕ ПУСТОЙ СТРОКИ" not in paragraph_prose, paragraph_prose
     assert len(ordinary_paragraph_continuations(paragraph_continuations)) == 2
+
+    # CommonMark tabs advance to the next 4-column tab stop. One leading
+    # tab after a blank line starts code; without the blank it continues a
+    # visible paragraph. Nested list code obeys the same column arithmetic.
+    tab_indented = (
+        "Введение.\n\n"
+        "\tconst secret = 123;\n"
+        "\tСЕКРЕТ_В_КОДЕ\n\n"
+        "Следующий абзац.\n"
+    )
+    tab_result = prose_only(tab_indented)
+    assert "Введение." in tab_result and "Следующий абзац." in tab_result, tab_result
+    assert "const secret" not in tab_result, tab_result
+    assert "СЕКРЕТ_В_КОДЕ" not in tab_result, tab_result
+    continued_paragraph = "Видимый абзац.\n\tВИДИМОЕ_ПРОДОЛЖЕНИЕ\n"
+    continued_result = prose_only(continued_paragraph)
+    assert "ВИДИМОЕ_ПРОДОЛЖЕНИЕ" in continued_result, continued_result
+
+    nested_tab_list = (
+        "- Верхний пункт\n"
+        "\t- Вложенный пункт\n"
+        "\n"
+        "\t\t\tСЕКРЕТ_ВЛОЖЕННОГО_КОДА\n"
+        "\n"
+        "После списка.\n"
+    )
+    nested_tab_result = prose_only(nested_tab_list)
+    for visible in ("Верхний пункт", "Вложенный пункт", "После списка"):
+        assert visible in nested_tab_result, (visible, nested_tab_result)
+    assert "СЕКРЕТ_ВЛОЖЕННОГО_КОДА" not in nested_tab_result, nested_tab_result
 
     # Multi-line list-indented code remains code until it dedents, including
     # after intervening blank lines and with Markdown-like syntax inside code.
