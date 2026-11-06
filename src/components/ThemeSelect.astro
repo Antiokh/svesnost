@@ -82,6 +82,9 @@ const labels = lang === 'ru'
     if (!(event.target instanceof Element)) return;
     const button = event.target.closest<HTMLButtonElement>('[data-sves-theme-slider]');
     if (!button) return;
+    // Keyboard activation of a slider should use the Arrow/Home/End keys,
+    // not synthesize a click at clientX=0 (which would always choose light).
+    if (event.detail === 0) return;
     const rect = button.getBoundingClientRect();
     const fraction = rect.width ? ((event.clientX - rect.left) / rect.width) : 0.5;
     apply(modes[Math.min(2, Math.max(0, Math.floor(fraction * 3)))]!);

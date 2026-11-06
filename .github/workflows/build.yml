@@ -23,7 +23,5 @@ jobs:
         run: npm run build
       - name: Check language isolation
         run: npm run test:i18n
-      - name: Install browser for UI checks
-        run: npx playwright install --with-deps chromium
       - name: Browser checks (mobile and desktop)
         run: npm run test:ui
