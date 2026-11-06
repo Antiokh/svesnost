@@ -1,0 +1,15 @@
+/* Основные типографические параметры соответствуют RSLive.
+   Все компоненты страницы остаются стандартными компонентами Starlight. */
+:root {
+  --sl-content-width: 54rem;
+  --sl-text-5xl: 2.35rem;
+}
+
+.sl-markdown-content table {
+  font-size: 0.92rem;
+}
+
+.sl-markdown-content > :is(ul, ol),
+.sl-markdown-content li > :is(ul, ol) {
+  margin-bottom: 1rem;
+}
