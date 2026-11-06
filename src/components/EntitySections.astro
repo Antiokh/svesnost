@@ -21,9 +21,9 @@ const hasGeoEvents = item?.entity === 'place' && Boolean(item.geo) && byKey('eve
 function relationDescription(target) {
   if (item?.entity !== 'person') return '';
   const outward = (item.relations ?? []).find((rel)=>rel.target === target.id);
-  if (outward) return [outward.kind, outward.role, outward.assessment].filter(Boolean).join(' · ');
+  if (outward) return ['→ ' + outward.kind, outward.role, outward.assessment].filter(Boolean).join(' · ');
   const inward = (target.relations ?? []).find((rel)=>rel.target === item.id);
-  return inward ? [inward.kind, inward.role, inward.assessment].filter(Boolean).join(' · ') : '';
+  return inward ? ['← ' + inward.kind, inward.role, inward.assessment].filter(Boolean).join(' · ') : '';
 }
 ---
 {item && arranged.map((section)=> (

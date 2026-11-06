@@ -3,7 +3,7 @@
  * never committed or deployed. Remove them in finally even on a build failure.
  */
 import assert from 'node:assert/strict';
-import { mkdirSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
@@ -111,6 +111,7 @@ entityId: person:fixture-a
 const roots=docs.map(([p])=>path.resolve(root,p));
 for (const filepath of roots) {
   assert.ok(filepath.startsWith(root+path.sep),'Fixture must stay inside the docs root');
+  assert.equal(existsSync(path.dirname(filepath)),false,'Synthetic test must never replace existing content: '+filepath);
 }
 const read=(url)=>readFileSync(path.resolve('dist',url.replace(/^\//,''),'index.html'),'utf8');
 try {

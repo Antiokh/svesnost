@@ -117,6 +117,7 @@ try {
   writeFileSync(path.join(recordDir,'real.pdf'),'%PDF-1.0 fixture');
   checkMediaFile('./real.pdf',document,dir);
   assert.throws(() => checkMediaFile('./does-not-exist.pdf',document,dir), /does not exist/);
+  assert.throws(() => checkMediaFile('./does-not-exist.png',document,dir), /does not exist/);
   assert.throws(() => checkMediaFile('../escape.pdf',document,dir), /must be a safe local/);
   assert.throws(() => checkMediaFile('https://example.org/remote.pdf',document,dir), /must be a safe local/);
   assert.throws(() => checkMediaFile('',document,dir), /must be a safe local/);

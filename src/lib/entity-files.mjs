@@ -2,7 +2,7 @@
  * Validate local media references from raw frontmatter before Astro imports them.
  * A plain string must never bypass the image() contract or escape docs/.
  */
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, statSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 
 const localPathPattern = /^\.\/(?!.*(?:\/\.\.?\/|\\\\))[a-z0-9_./-]+\.(?:jpe?g|png|gif|webp|avif|svg|pdf|txt|csv|json|mp3|ogg|wav|mp4|webm|mov|zip)$/i;
@@ -18,7 +18,14 @@ export function checkMediaFile(file, documentPath, docsRoot, fileExists = exists
     throw new Error(`${documentPath}: media.file escapes the content directory`);
   }
   if (!fileExists(target)) throw new Error(`${documentPath}: media.file does not exist: ${file}`);
-  if (fileExists === existsSync && !statSync(target).isFile()) {
-    throw new Error(`${documentPath}: media.file must point to a regular file: ${file}`);
+  if (fileExists === existsSync) {
+    if (!statSync(target).isFile()) {
+      throw new Error(`${documentPath}: media.file must point to a regular file: ${file}`);
+    }
+    const actualRoot = realpathSync(root);
+    const actualFile = realpathSync(target);
+    if (!actualFile.startsWith(actualRoot + path.sep)) {
+      throw new Error(`${documentPath}: media.file symlink escapes the content directory`);
+    }
   }
 }
