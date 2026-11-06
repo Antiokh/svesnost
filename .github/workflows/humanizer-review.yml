@@ -3,6 +3,10 @@ name: Језичка редактура / Языковая редактура
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'src/content/docs/**/*.md'
+      - 'src/content/docs/**/*.mdx'
+      - '!src/content/docs/en/**'
 
 permissions:
   contents: read
