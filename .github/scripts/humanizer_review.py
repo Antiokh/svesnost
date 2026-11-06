@@ -237,9 +237,31 @@ def mask_inline_dollar_math(chars: list[str]) -> None:
             pos -= 1
         return backslashes % 2 == 1
 
+    def starts_currency(pos: int) -> bool:
+        """Protect a dollar-prefixed amount from being read as a math opener.
+
+        In "$100–$200" and "$5/$10" both dollar signs begin new amounts.
+        Arithmetic such as "$2+2$" and "$E=mc^2$" remains eligible as math.
+        """
+        match = re.match(r"\d+(?:[.,]\d+)*", text[pos + 1:])
+        if match is None:
+            return False
+        end = pos + 1 + match.end()
+        trailing = text[end:end + 1]
+        if trailing in ("/", "–", "—", "-"):
+            next_dollar = text.find("$", end + 1)
+            return (next_dollar >= 0 and "\n" not in text[end:next_dollar]
+                    and next_dollar + 1 < len(text)
+                    and text[next_dollar + 1].isdigit() and not escaped(next_dollar))
+        if trailing in ("+", "*", "^", "=", "$"):
+            return False
+        if trailing and trailing.isalpha():
+            return False
+        return not trailing or trailing.isspace() or trailing in ",.;:!?)]}"
+
     pos = 0
     while pos < len(text):
-        if (text[pos] != "$" or escaped(pos)
+        if (text[pos] != "$" or escaped(pos) or starts_currency(pos)
                 or (pos > 0 and text[pos - 1] == "$")
                 or (pos + 1 < len(text) and (text[pos + 1] == "$" or text[pos + 1].isspace()))):
             pos += 1
