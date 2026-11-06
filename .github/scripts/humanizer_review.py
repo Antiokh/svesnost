@@ -625,6 +625,50 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "Мария" not in borderless_result and "900" not in borderless_result
     assert "Обычная проза" in prose_only("Обычная проза А | Б без таблицы.")
 
+    # Pipes inside Markdown code spans and escaped pipes are not table columns.
+    ticks = chr(96)
+    headers = [
+        f"| Оператор {ticks}a|b{ticks} | Значение |",
+        f"| Оператор {ticks * 2}a|b{ticks * 2} | Значение |",
+        r"| Оператор a\|b | Значение |",
+    ]
+    for header in headers:
+        assert len(_table_cells(header)) == 2, (_table_cells(header), header)
+        table_with_code = (
+            "Проза до таблицы.\n" + header
+            + "\n| --- | --- |\n| Пример | 1000 |\n\nПроза после таблицы.\n"
+        )
+        extracted = prose_only(table_with_code)
+        for visible in ("Проза до таблицы", "Проза после таблицы"):
+            assert visible in extracted, (visible, extracted)
+        for hidden in ("Оператор", "Значение", "Пример", "1000"):
+            assert hidden not in extracted, (hidden, extracted)
+
+    # HTML/MDX table data is excluded, while surrounding prose survives.
+    html_table = (
+        "Проза перед таблицей.\n"
+        "<table className=\"data\"><thead><tr><th>Участник</th></tr></thead>"
+        "<tbody><tr><td>Иван</td><td>1000</td></tr></tbody></table>\n"
+        "<p>Проза после таблицы.</p>\n"
+    )
+    jsx_table = (
+        "Начальный абзац.\n"
+        "<Table data={{ secret: 'СЕКРЕТНЫЕ ДАННЫЕ' }}>"
+        "<tr><td>Мария</td><td>2000</td></tr></Table>\n"
+        "Заключительный абзац.\n"
+    )
+    for sample, visible, hidden in (
+        (html_table, ("Проза перед таблицей", "Проза после таблицы"),
+         ("Участник", "Иван", "1000")),
+        (jsx_table, ("Начальный абзац", "Заключительный абзац"),
+         ("Мария", "2000", "СЕКРЕТНЫЕ ДАННЫЕ")),
+    ):
+        result = prose_only(sample)
+        for value in visible:
+            assert value in result, ("lost prose beside table", value, result)
+        for value in hidden:
+            assert value not in result, ("HTML/JSX table leaked", value, result)
+
     # Indented nested list items are prose, but standalone indented blocks are code.
     nested = """- Основной пункт списка
     - Вложенный пункт списка
