@@ -1342,6 +1342,19 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         assert hidden not in soft_link_prose, ("multiline label leaked metadata", hidden, soft_link_prose)
     assert len(markdown_inline_links(soft_break_link)) == 1
 
+    # An angle-bracket link destination may contain a literal unmatched ).
+    # The complete destination including the technical tail must be hidden.
+    for angle_link in (
+        "До [Документ](<b)c>) после.",
+        "До [Материал](<path_(foo)more>) после.",
+    ):
+        angle_prose = prose_only(angle_link)
+        assert "До" in angle_prose and "после" in angle_prose, angle_prose
+        assert "b)c>" not in angle_prose and "foo)more" not in angle_prose, angle_prose
+        assert "<" not in angle_prose and ">" not in angle_prose, angle_prose
+    assert "Документ" in prose_only("До [Документ](<b)c>) после.")
+    assert "Материал" in prose_only("До [Материал](<path_(foo)more>) после.")
+
     # An escaped Markdown literal \\( is not a TeX opener. It must not pair
     # with the closing delimiter of a later, real inline formula.
     quoted_tex = r"До \\( буквально. Важная проза после литерала. \(x+1\) Конец."
@@ -1726,6 +1739,17 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     for hidden in ("СЕКРЕТНОЕ TITLE", "/page", "/hidden", "[other]:"):
         assert hidden not in long_ref_text, ("definition leaked metadata", hidden, long_ref_text)
 
+    # Definitions may omit whitespace entirely between ':' and destination.
+    compact_reference = (
+        "[ref]:/private/internal-path\n"
+        "\n"
+        "Текст со [ссылкой][ref].\n"
+    )
+    compact_body = prose_only(compact_reference)
+    assert "Текст со" in compact_body and "ссылкой" in compact_body, compact_body
+    assert "/private/internal-path" not in compact_body, compact_body
+    assert "[ref]:" not in compact_body, compact_body
+
     # Entire GFM table blocks are structural data, with or without border pipes.
     table = """Текст до таблицы.
 
@@ -1745,6 +1769,7 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
 Имя | Значение
 --- | ---
 Мария | 900
+
 После таблицы.
 """
     borderless_result = prose_only(borderless)
@@ -1756,6 +1781,7 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         "> | Участник | Сумма |\n"
         "> | --- | --- |\n"
         "> | Иван | 1000 |\n"
+        ">\n"
         "> Видимая проза после таблицы внутри цитаты.\n"
         "Обычная проза после цитаты.\n"
     )
@@ -1765,6 +1791,28 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         assert visible in quoted_prose, ("prose lost near quoted table", visible, quoted_prose)
     for hidden in ("Участник", "Сумма", "Иван", "1000"):
         assert hidden not in quoted_prose, ("quoted GFM table leaked", hidden, quoted_prose)
+
+    # A GFM table row with only its first cell populated can contain no
+    # pipe. It remains table data up to the next blank line/new block.
+    pipe_free_row = (
+        "| Имя | Сумма |\n"
+        "| --- | --- |\n"
+        "СЕКРЕТНЫЕ ТАБЛИЧНЫЕ ДАННЫЕ\n"
+        "\n"
+        "Видимый абзац.\n"
+    )
+    pipe_free_result = prose_only(pipe_free_row)
+    assert "СЕКРЕТНЫЕ ТАБЛИЧНЫЕ ДАННЫЕ" not in pipe_free_result, pipe_free_result
+    assert "Видимый абзац." in pipe_free_result, pipe_free_result
+    table_then_heading = (
+        "| Имя | Сумма |\n"
+        "| --- | --- |\n"
+        "ДАННЫЕ БЕЗ PIPES\n"
+        "# Видимый заголовок после таблицы\n"
+    )
+    heading_result = prose_only(table_then_heading)
+    assert "ДАННЫЕ БЕЗ PIPES" not in heading_result, heading_result
+    assert "Видимый заголовок после таблицы" in heading_result, heading_result
 
     # Pipes inside Markdown code spans and escaped pipes are not table columns.
     ticks = chr(96)
