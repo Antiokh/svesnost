@@ -113,11 +113,21 @@ def prose_only(raw: str) -> str:
     chars = list(text)
     offset = 0
     in_fence = None
+    in_math = None
 
     for line in text.splitlines(keepends=True):
         trimmed = line.lstrip()
         fence = FENCE.match(line)
-        if in_fence:
+        if in_math:
+            hide(chars, offset, offset + len(line))
+            if in_math in line:
+                in_math = None
+        elif trimmed.startswith(("$", "\[")):
+            hide(chars, offset, offset + len(line))
+            closing = "$" if trimmed.startswith("$") else "\]"
+            if closing not in trimmed[2:]:
+                in_math = closing
+        elif in_fence:
             hide(chars, offset, offset + len(line))
             if (trimmed.rstrip().startswith(in_fence[0] * in_fence[1])
                     and not trimmed.rstrip().lstrip(in_fence[0]).strip()):
@@ -129,7 +139,8 @@ def prose_only(raw: str) -> str:
         elif (line.startswith(("    ", "\t")) and trimmed.strip()
               or MODULE.match(line)
               or REFERENCE.match(line)
-              or re.match(r"^ {0,3}(?:::|:::|!!!)\s", line)
+              or re.match(r"^ {0,3}(?:::{1}|!{3})", line)
+              or re.match(r"^ {0,3}(?:-{3,}|\*{3,}|_{3,})\s*$", line)
               or re.match(r"^\s*\|?\s*:?[-]{3,}:?\s*(?:\|.*)?$", line)):
             hide(chars, offset, offset + len(line))
         offset += len(line)
@@ -193,6 +204,8 @@ def prose_only(raw: str) -> str:
     for match in re.finditer(r"\[\^[^\]\n]+\](?=:?)", cleaned):
         hide(chars, *match.span())
     for match in re.finditer(r"(?m)^ {0,3}(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s+)", cleaned):
+        hide(chars, *match.span())
+    for match in re.finditer(r"\\\([\s\S]*?\\\)", cleaned):
         hide(chars, *match.span())
 
     cleaned = "".join(chars)
@@ -349,6 +362,11 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert language(DOCS + "story.mdx") == "sr"
     assert language("docs/story.md") is None
     assert prose_only("---\ntitle: private\n") == ""
+    special = "Проза до формулы.\n---\n:::note\nСодержимое примечания — это проза.\n:::\n$\nx^2 + 1\n$\nИ проза после.\n"
+    isolated = prose_only(special)
+    assert "Проза до формулы." in isolated and "Содержимое примечания" in isolated
+    assert "И проза после." in isolated and "x^2" not in isolated
+    assert "---" not in isolated and ":::note" not in isolated and "$" not in isolated
     return {"result": "OK", "frontmatter": "excluded", "mdx_jsx": "excluded",
             "readable_prose": "retained", "languages": ["ru", "sr"]}
 
