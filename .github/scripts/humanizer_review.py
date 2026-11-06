@@ -797,6 +797,21 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     extracted = prose_only(in_code)
     assert "Проза после блока." in extracted, extracted
 
+    # The literal <!-- inside inline code, an MDX attribute or a JS expression
+    # cannot open an HTML comment and consume following reader-visible text.
+    fake_openers = (
+        "До " + chr(96) + "<!--" + chr(96)
+        + " и видимая проза.\nСледующий абзац.\n",
+        '<Aside title="<!--">Видимый текст компонента.</Aside>\nСледующий абзац.\n',
+        'Проза с {flag === "<!--" ? "да" : "нет"} рядом.\nСледующий абзац.\n',
+    )
+    for sample in fake_openers:
+        extracted = prose_only(sample)
+        assert "Следующий абзац." in extracted, ("comment opener escaped", extracted)
+    assert "видимая проза" in prose_only(fake_openers[0])
+    assert "Видимый текст компонента" in prose_only(fake_openers[1])
+    assert "Проза с" in prose_only(fake_openers[2])
+
     # Indented code in Markdown blockquotes is code even though the original
     # line begins with '>' instead of four spaces.
     for quoted_code in (
@@ -937,6 +952,46 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         for amount in amounts:
             assert amount in extracted, ("currency masked as math", original, extracted)
     assert "2+2" not in prose_only("Математика $2+2$ остаётся формулой.")
+
+    # Footnote definitions can contain indented, reader-visible continuation
+    # lines, even after a blank line. A later independent indented code block
+    # must still be suppressed after the definition's unindented prose ends.
+    footnote = (
+        "[^1]: Документ и источник.\n"
+        "    Уточнение о статусе источника.\n"
+        "\n"
+        "    Продолжение сноски после пустой строки.\n"
+        "Обычная проза после сноски.\n"
+        "\n"
+        "    КОД ВНЕ СНОСКИ\n"
+    )
+    footnote_prose = prose_only(footnote)
+    for visible in ("Документ и источник", "Уточнение о статусе источника",
+                    "Продолжение сноски после пустой строки",
+                    "Обычная проза после сноски"):
+        assert visible in footnote_prose, ("footnote prose lost", visible, footnote_prose)
+    assert "КОД ВНЕ СНОСКИ" not in footnote_prose, footnote_prose
+
+    # A pure rename must compare the new head path to the previous base path,
+    # and must not load either Humanizer or repeat all existing findings.
+    from tempfile import TemporaryDirectory
+    with TemporaryDirectory() as folder:
+        old_root = Path(folder) / "old"
+        new_root = Path(folder) / "new"
+        old_path = DOCS + "ru/old.md"
+        new_path = DOCS + "ru/new.md"
+        article_text = "---\ntitle: Hidden title\n---\nСтарая проверяемая проза.\n"
+        for root, relative in ((old_root, old_path), (new_root, new_path)):
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(article_text, encoding="utf-8")
+        rename = json.loads(json.dumps({"head": new_path, "base": old_path}))
+        summary = report([rename], old_root, new_root,
+                         Path(folder) / "not-installed-ru",
+                         Path(folder) / "not-installed-sr")
+        assert MARKER in summary, summary
+        assert new_path not in summary, ("pure rename reported as new", summary)
+        assert "Новых замечаний нет" not in summary, summary
 
     # Serbian findings are subtracted by evidence multiset, not by total rule count.
     from types import SimpleNamespace
