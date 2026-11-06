@@ -53,7 +53,9 @@ export function buildEntityProjections(entries) {
         url: pathForId(id),
         title: data.title || data.name?.display || data.entityId,
         description: data.description || null,
-        ...Object.fromEntries(Object.entries(data).filter(([key]) => key !== 'title' && key !== 'description' && key !== 'slug')),
+        // Canonical fields are computed by the indexer, never owned by raw YAML.
+        ...Object.fromEntries(Object.entries(data).filter(([key]) =>
+          !['title', 'description', 'slug', 'id', 'url', 'entity', 'entityId'].includes(key))),
       }));
     const byId = Object.fromEntries(rows.map((r)=>[r.id,r]));
     const perType = (type) => rows.filter((r)=>r.entity===type);
