@@ -710,6 +710,50 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         assert "const secret" not in extracted and "КОД В" not in extracted, extracted
     assert "Видимый пункт списка" in prose_only(nested_fences[2][0])
 
+    # A list marker inside a fenced block must not mutate the enclosing list:
+    # otherwise the closing fence can be mistaken for indented prose.
+    list_markers_inside_code = (
+        "- Видимый пункт\n"
+        "    ~~~\n"
+        "    - КОД В СПИСКЕ\n"
+        "    ~~~\n"
+        "После списка.\n"
+    )
+    extracted = prose_only(list_markers_inside_code)
+    assert "Видимый пункт" in extracted and "После списка." in extracted, extracted
+    assert "КОД В СПИСКЕ" not in extracted, extracted
+
+    # HTML comment contents are not Markdown block syntax. An embedded fence
+    # or math opener must not consume the text after the comment closes.
+    for fake_delimiter in ("~~~", chr(36) * 2, r"\["):
+        comment = (
+            "Проза до комментария.\n"
+            "<!--\n" + fake_delimiter + "\n-->\n"
+            "Проза после комментария.\n"
+        )
+        extracted = prose_only(comment)
+        assert "Проза до комментария." in extracted, extracted
+        assert "Проза после комментария." in extracted, extracted
+        assert fake_delimiter not in extracted, extracted
+    # HTML-style syntax *inside code* must not start a real comment either.
+    in_code = (
+        "Проза до блока.\n" + chr(96) * 3 + "html\n"
+        "<!--\n" + chr(96) * 3 + "\n"
+        "Проза после блока.\n"
+    )
+    extracted = prose_only(in_code)
+    assert "Проза после блока." in extracted, extracted
+
+    # Indented code in Markdown blockquotes is code even though the original
+    # line begins with '>' instead of four spaces.
+    for quoted_code in (
+        ">     КОД В ЦИТАТЕ\n> Видимый текст.\n",
+        "> >     КОД ВО ВЛОЖЕННОЙ ЦИТАТЕ\n> > Видимый текст.\n",
+    ):
+        extracted = prose_only(quoted_code)
+        assert "КОД В" not in extracted, extracted
+        assert "Видимый текст." in extracted, extracted
+
     # Reference-style Markdown links: keep reader-visible label only.
     reference = (
         "Читайте [проверенную публикацию][source] и [документ][].\n"
