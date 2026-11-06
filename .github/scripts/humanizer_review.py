@@ -525,6 +525,33 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "Проза до формулы." in isolated and "Содержимое примечания" in isolated
     assert "И проза после." in isolated and "x^2" not in isolated
     assert "---" not in isolated and ":::note" not in isolated and chr(36) * 2 not in isolated
+
+    # Fenced code is authoritative: math-looking lines inside must not open math
+    # blocks that swallow the paragraph after the closing code fence.
+    marker = chr(96) * 3
+    for math_start in (chr(36) * 2 + " не закрыто", r"\[ не закрыто"):
+        fenced = (
+            "Обычный текст перед кодом.\n" + marker + "text\n"
+            + math_start + "\n" + marker + "\n"
+            + "Обычный текст после кода.\n"
+        )
+        after_fence = prose_only(fenced)
+        assert "Обычный текст перед кодом." in after_fence, after_fence
+        assert "Обычный текст после кода." in after_fence, after_fence
+        assert "не закрыто" not in after_fence, after_fence
+
+    # Reference-style Markdown links: keep reader-visible label only.
+    reference = (
+        "Читайте [проверенную публикацию][source] и [документ][].\n"
+        "Не показывать ![изображение][cover].\n"
+        "[source]: https://example.org/secret\n"
+        "[cover]: https://example.org/image.png\n"
+    )
+    reference_body = prose_only(reference)
+    assert "проверенную публикацию" in reference_body, reference_body
+    assert "документ" in reference_body, reference_body
+    for hidden in ("[source]", "[cover]", "изображение", "example.org", "[]"):
+        assert hidden not in reference_body, (hidden, reference_body)
     # Entire GFM table blocks are structural data, with or without border pipes.
     table = """Текст до таблицы.
 
