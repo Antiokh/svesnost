@@ -437,11 +437,21 @@ def mask_fenced_blocks(text: str, chars: list[str]) -> None:
     """
     offset = 0
     in_fence = None
+    in_comment = False
     list_indents: list[tuple[int, int]] = []
-    for line in "".join(chars).splitlines(keepends=True):
+    # Comments are masked before code fences, but markers inside an already
+    # open fence are code literals rather than HTML comments.
+    comment_lines = iter(html_comment_scan_view("".join(chars)).splitlines(keepends=True))
+    for original_line in "".join(chars).splitlines(keepends=True):
+        comment_line = next(comment_lines)
+        line = original_line
+        if not in_fence:
+            line, in_comment = mask_html_comments_in_line(
+                comment_line, chars, offset, in_comment
+            )
         trimmed = line.lstrip()
         indent = len(line) - len(trimmed)
-        if not in_fence:
+        if not in_fence and not in_comment:
             marker = re.match(r"^( *)(?:[-*+]|\d+[.)])\s+", line)
             if marker:
                 if indent < 4 or list_indents:
@@ -459,7 +469,7 @@ def mask_fenced_blocks(text: str, chars: list[str]) -> None:
                     and len(fence.group(1)) >= in_fence[1]
                     and not fence_text[fence.end():].strip()):
                 in_fence = None
-        elif fence:
+        elif not in_comment and fence:
             token = fence.group(1)
             in_fence = (token[0], len(token), quote_depth)
             hide(chars, offset, offset + len(line))
