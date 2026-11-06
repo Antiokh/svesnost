@@ -1723,6 +1723,36 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "Документ" in prose_only(with_later_link)
     assert "/page" not in prose_only(with_later_link)
 
+    # CommonMark URI autolinks use any valid scheme, not just http(s).
+    uri_autolinks = (
+        "Контакт <mailto:editor@example.org> для связи.\n"
+        "Файлы <ftp://files.example.org/path> доступны здесь.\n"
+        "Другой <custom+v1:private/resource> пример.\n"
+        "\n"
+        "Дальнейший читательский абзац.\n"
+    )
+    uri_body = prose_only(uri_autolinks)
+    for wanted in ("Контакт", "для связи", "Файлы", "доступны здесь",
+                   "Другой", "пример", "Дальнейший читательский абзац"):
+        assert wanted in uri_body, ("autolink swallowed prose", wanted, uri_body)
+    for metadata in ("editor@example.org", "files.example.org/path",
+                     "custom+v1:private/resource", "mailto:", "ftp:"):
+        assert metadata not in uri_body, ("autolink leaked metadata", metadata, uri_body)
+    escaped_uri = "\\<mailto:visible@example.org> — видимый литерал."
+    escaped_body = prose_only(escaped_uri)
+    assert "mailto:visible@example.org" in escaped_body, escaped_body
+    assert "видимый литерал" in escaped_body, escaped_body
+    hidden_in_code = (
+        "До кода " + chr(96) + "<mailto:hidden@example.org>" + chr(96)
+        + " после кода.\n"
+        + "~~~md\n<ftp://internal.example.org/data>\n~~~\n"
+        + "Обычный читательский абзац.\n"
+    )
+    code_body = prose_only(hidden_in_code)
+    assert "hidden@example.org" not in code_body, code_body
+    assert "internal.example.org" not in code_body, code_body
+    assert "Обычный читательский абзац" in code_body, code_body
+
     # An angle-bracket link destination may contain a literal unmatched ).
     # The complete destination including the technical tail must be hidden.
     for angle_link in (
@@ -2179,6 +2209,22 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     # An even number of preceding backslashes leaves '!' unescaped.
     even_escapes = "\\\\![Документ]\n\n[Документ]: /private/path\n"
     assert "Документ" not in prose_only(even_escapes), prose_only(even_escapes)
+
+    # An escaped bang before an inline link is literal punctuation, not an
+    # image opener. Even backslash parity restores image syntax.
+    inline_escaped_image = (
+        "\\![Документ](/private/guide) и "
+        "![СЕКРЕТНЫЙ ALT](/private/image)\n"
+    )
+    inline_escaped_prose = prose_only(inline_escaped_image)
+    assert "Документ" in inline_escaped_prose, inline_escaped_prose
+    assert "СЕКРЕТНЫЙ ALT" not in inline_escaped_prose, inline_escaped_prose
+    for path in ("/private/guide", "/private/image"):
+        assert path not in inline_escaped_prose, inline_escaped_prose
+    inline_even_escapes = "\\\\![СКРЫТЫЙ ALT](/private/image)\n"
+    assert "СКРЫТЫЙ ALT" not in prose_only(inline_even_escapes)
+    assert not markdown_inline_links("\\![Документ](/private/guide)")[0][4]
+    assert markdown_inline_links("![Документ](/private/guide)")[0][4]
 
     # Reference definitions, including inside blockquotes, hide the entire
     # destination and a continuation title on the next line.
