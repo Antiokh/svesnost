@@ -414,7 +414,19 @@ def find_matching_raw_close(text: str, opening_end: int, tag: str) -> int | None
     pattern = re.compile(r"</?" + re.escape(tag) + r"(?=[\s/>])", re.I)
     depth = 1
     pos = opening_end
-    while match := pattern.search(text, pos):
+    while True:
+        match = pattern.search(text, pos)
+        comment_start = text.find("<!--", pos)
+        # HTML-comment contents are never tags. Skip even a matching
+        # </table> that appears before the real outer closing tag.
+        if comment_start >= 0 and (match is None or comment_start < match.start()):
+            comment_end = text.find("-->", comment_start + 4)
+            if comment_end < 0:
+                return None
+            pos = comment_end + 3
+            continue
+        if match is None:
+            return None
         start = match.start()
         end = end_tag(text, start)
         if end <= start or end == len(text) and ">" not in text[start:end]:
@@ -473,6 +485,68 @@ def mask_fenced_blocks(text: str, chars: list[str]) -> None:
             token = fence.group(1)
             in_fence = (token[0], len(token), quote_depth)
             hide(chars, offset, offset + len(line))
+        offset += len(line)
+
+
+def mask_indented_code_before_blocks(text: str, chars: list[str]) -> None:
+    """Hide indented code before detecting ESM declarations or HTML raw tags.
+
+    Preserve nested list prose and multiline footnote continuations. Code
+    inside lists starts after a blank line at list-content-indent + 4 and
+    continues until the next nonblank line dedents.
+    """
+    offset = 0
+    list_indents: list[tuple[int, int]] = []
+    list_code_indent: int | None = None
+    after_blank = False
+    in_footnote = False
+    for line in "".join(chars).splitlines(keepends=True):
+        trimmed = line.lstrip()
+        indent = len(line) - len(trimmed)
+        visible, quote_depth = _unquote_line(line)
+        quote_indent = len(visible) - len(visible.lstrip(" "))
+        if list_code_indent is not None:
+            if not trimmed.strip() or indent >= list_code_indent:
+                hide(chars, offset, offset + len(line))
+                offset += len(line)
+                continue
+            list_code_indent = None
+
+        footnote = re.match(r"^ {0,3}\[\^[^\]\n]+\]:[ \t]*", line)
+        if footnote:
+            in_footnote = True
+        elif trimmed.strip() and indent < 4:
+            in_footnote = False
+
+        marker = re.match(r"^( *)(?:[-*+]|\d+[.)])\s+", line)
+        if not trimmed.strip():
+            after_blank = bool(list_indents)
+        elif footnote:
+            after_blank = False
+        elif in_footnote and 4 <= indent < 8:
+            after_blank = False
+        elif marker:
+            if indent >= 4 and not list_indents:
+                hide(chars, offset, offset + len(line))
+            else:
+                while list_indents and list_indents[-1][0] >= indent:
+                    list_indents.pop()
+                list_indents.append((indent, len(marker.group(0))))
+            after_blank = False
+        elif quote_depth and quote_indent >= 4:
+            hide(chars, offset, offset + len(line))
+            after_blank = False
+        elif indent >= 4:
+            if not list_indents:
+                hide(chars, offset, offset + len(line))
+            elif after_blank and indent >= list_indents[-1][1] + 4:
+                list_code_indent = list_indents[-1][1] + 4
+                hide(chars, offset, offset + len(line))
+            after_blank = False
+        else:
+            if list_indents and indent < list_indents[0][1]:
+                list_indents.clear()
+            after_blank = False
         offset += len(line)
 
 
@@ -645,10 +719,10 @@ def mask_html_comments_in_line(
 def prose_only(raw: str) -> str:
     text = body_without_frontmatter(raw)
     chars = list(text)
-    # Respect code context before detecting ESM: an incomplete "import {"
-    # inside a fence must not consume the next reader-visible paragraph.
-    # Raw containers are masked first so their internal ~~~ and $ cannot
-    # alter the state of the block or ESM scanner.
+    # Before detecting raw HTML and ESM, exclude indented Markdown code.
+    # Otherwise an indented "<pre>" or incomplete "import {" can swallow
+    # the next reader-visible paragraph. Fenced code is masked before ESM.
+    mask_indented_code_before_blocks(text, chars)
     mask_raw_elements_before_blocks(text, chars)
     mask_fenced_blocks(text, chars)
     mask_mdx_esm(text, chars)
@@ -784,7 +858,7 @@ def prose_only(raw: str) -> str:
             hide(chars, pos, end)
             pos = end
             continue
-        if text[pos] == "<":
+        if text[pos] == "<" and not is_markdown_escaped(text, pos):
             match = re.match(r"</?([A-Za-z][\w.:-]*)(?=[\s/>])", text[pos:])
             if match or text.startswith(("<>", "</>"), pos):
                 tagname = match.group(1) if match else ""
