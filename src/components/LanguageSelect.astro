@@ -1,11 +1,21 @@
 ---
 import { getCollection } from 'astro:content';
 
-const existing = new Set((await getCollection('docs', ({ data }) => !data.draft)).map(({ id }) =>
-  id === 'index' ? '' : id,
-));
-const locale = Astro.locals.starlightRoute.locale ?? 'root';
-const currentId = Astro.locals.starlightRoute.id;
+const published = await getCollection('docs', ({ data }) => !data.draft);
+const existing = new Set(published.map(({ id }) => id === 'index' ? '' : id));
+const route = Astro.locals.starlightRoute;
+const locale = route.locale ?? 'root';
+const currentId = route.id;
+const entityId = !route.isFallback ? route.entry.data.entityId : undefined;
+const entityLocales = new Map();
+if (entityId) {
+  for (const { id, data } of published) {
+    if (data.entityId !== entityId) continue;
+    const code = id === 'ru' || id.startsWith('ru/') ? 'ru'
+      : id === 'en' || id.startsWith('en/') ? 'en' : 'root';
+    entityLocales.set(code, id === 'index' ? '' : id);
+  }
+}
 const relativeSlug = locale === 'root'
   ? currentId
   : currentId === locale ? '' : currentId.slice(locale.length + 1);
@@ -14,8 +24,11 @@ const languages = [
   { code: 'ru', prefix: 'ru', label: 'Русский', short: 'RU', lang: 'ru' },
   { code: 'en', prefix: 'en', label: 'English', short: 'EN', lang: 'en' },
 ].map(({ code, prefix, label, short, lang }) => {
-  const targetId = [prefix, relativeSlug].filter(Boolean).join('/');
-  const translated = existing.has(targetId);
+  const samePathId = [prefix, relativeSlug].filter(Boolean).join('/');
+  // Structured entities use stable identity, NOT identical translated slugs.
+  // Non-entity pages preserve the existing same-path behavior.
+  const targetId = entityId ? entityLocales.get(code) : samePathId;
+  const translated = entityId ? entityLocales.has(code) : existing.has(samePathId);
   const href = '/' + (translated ? targetId : prefix);
   return { code, label, short, lang, translated, href: href === '/' ? href : href + '/' };
 });

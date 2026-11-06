@@ -1,0 +1,35 @@
+---
+// Shared evidence/document iframe, adapted from RSLive EmbedFrame.
+// A direct link remains available without scripts or third-party iframe loading.
+interface Props {
+  src: string;
+  title?: string;
+  aspect?: string;
+  caption?: string;
+  height?: string;
+  allow?: string;
+  linkHref?: string;
+}
+const { src, title = 'Embedded material', aspect = '16 / 9', caption,
+  height, allow = 'fullscreen; picture-in-picture', linkHref = src } = Astro.props;
+function safeHttpUrl(value: string): string {
+  const url = new URL(value, Astro.url);
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('EmbedFrame requires HTTP(S) src');
+  return url.href;
+}
+const embed = safeHttpUrl(src);
+const link = safeHttpUrl(linkHref);
+const open = Astro.url.pathname.startsWith('/ru/') ? 'Открыть отдельно'
+  : Astro.url.pathname.startsWith('/en/') ? 'Open separately' : 'Отвори засебно';
+---
+<figure class="sves-embed">
+  <iframe src={embed} title={title} loading="lazy"
+    referrerpolicy="strict-origin-when-cross-origin" allow={allow} allowfullscreen
+    style={`aspect-ratio:${aspect};${height ? 'height:'+height+';' : ''}`}></iframe>
+  <figcaption>{caption || title} · <a href={link} target="_blank" rel="noopener noreferrer">{open}</a></figcaption>
+</figure>
+<style>
+  .sves-embed { margin: 1.5rem 0; }
+  .sves-embed iframe { display: block; width: 100%; border: 1px solid var(--sl-color-gray-5); border-radius: 0.5rem; background: var(--sl-color-bg); }
+  .sves-embed figcaption { margin-top:0.4rem; color:var(--sl-color-gray-3); font-size:var(--sl-text-sm); }
+</style>

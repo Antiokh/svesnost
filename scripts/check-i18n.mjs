@@ -43,3 +43,22 @@ assert.ok(policy.includes('data-panel-toggle="sidebar"'), 'Article lacks desktop
 assert.ok(policy.includes('data-panel-toggle="toc"'), 'Article lacks desktop ToC control');
 assert.ok(existsSync(path.join(root, 'pagefind')), 'Missing Pagefind index');
 console.log('Language routing, navigation and search exclusions: OK');
+
+for (const [prefix,lang] of [['','sr'],['/ru','ru'],['/en','en']]) {
+  const url = prefix + '/events/map/';
+  const html = read(url);
+  assert.match(html,new RegExp('<html[^>]+lang="' + lang + '"'));
+  assert.ok(html.includes('data-event-map'), url + ' lacks event map component');
+  assert.ok(html.includes('data-locale="' + lang + '"'), url + ' wrong map edition');
+}
+for (const file of ['entity-index.json','events.json','places.json','person-event-index.json','places.geojson']) {
+  assert.ok(existsSync(path.join(root,'generated',file)), 'Missing generated ' + file);
+}
+const index = JSON.parse(readFileSync(path.join(root,'generated','entity-index.json'),'utf8'));
+assert.deepEqual(Object.keys(index.locales), ['sr','ru','en']);
+const geojson = JSON.parse(readFileSync(path.join(root,'generated','places.geojson'),'utf8'));
+assert.equal(geojson.type,'FeatureCollection');
+for(const feature of geojson.features) {
+  assert.ok(index.locales[feature.properties.locale]?.records.some((record) => record.url === feature.properties.eventUrl));
+}
+console.log('Entity map routes and generated projections: OK');

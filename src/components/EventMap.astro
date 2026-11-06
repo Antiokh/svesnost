@@ -1,0 +1,121 @@
+---
+// Common map of georeferenced editorial events. Basemap optional: HTML links always work.
+// MapLibre is shared with RSLive/genealogy, without their themes or genealogy layers.
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import 'maplibre-gl/dist/maplibre-gl.css';
+
+const route = Astro.locals.starlightRoute;
+const locale = route.locale === 'ru' ? 'ru' : route.locale === 'en' ? 'en' : 'sr';
+const copy = {
+  sr: {title:'Карта догађаја',empty:'Још нема догађаја са познатим координатама.',notice:'Означена координата може бити приближна: град или регион нису тачна адреса.',entries:'Догађаји на карти',fallback:'Карта захтева JavaScript и приступ мрежи. Линкови испод раде и без њих.'},
+  ru: {title:'Карта событий',empty:'Пока нет событий с известными координатами.',notice:'Координата может быть приблизительной: город или регион не означают точный адрес.',entries:'События на карте',fallback:'Для интерактивной карты нужны JavaScript и сеть. Ссылки ниже работают без них.'},
+  en: {title:'Event map',empty:'No events with known coordinates yet.',notice:'Coordinates may be approximate: a city or region does not mean an exact address.',entries:'Mapped events',fallback:'The interactive map requires JavaScript and network access. The links below work without them.'},
+}[locale];
+const data = JSON.parse(readFileSync(path.resolve('public/generated/places.geojson'), 'utf8'));
+const features = data.features.filter((feature) => feature.properties.locale === locale);
+const entries = [...new Map(features.map((feature) => [feature.properties.eventId,{
+  id:feature.properties.eventId, title:feature.properties.eventTitle, url:feature.properties.eventUrl,
+  date:feature.properties.date,
+}])).values()];
+const formatDate = (value) => typeof value==='number'?String(value):typeof value==='string'?value:
+  typeof value?.year==='number'?String(value.year):'';
+---
+<section class="sves-event-map" data-event-map data-locale={locale} aria-label={copy.title}>
+  {features.length === 0 ? <p>{copy.empty}</p> : (
+    <>
+      <p class="sves-map-note">{copy.notice}</p>
+      <div class="sves-map-canvas" data-map-canvas role="region" aria-label={copy.title}></div>
+      <p class="sves-map-fallback">{copy.fallback}</p>
+      <h2>{copy.entries}</h2>
+      <ol class="sves-mapped-events">
+        {entries.map((event) => <li><a href={event.url}>{event.title}</a>{event.date && <span> · {formatDate(event.date)}</span>}</li>)}
+      </ol>
+    </>
+  )}
+</section>
+
+<script>
+  // The public GeoJSON is a projection of authored events and place coordinates.
+  // Never interpret editorial labels as HTML.
+  async function renderMaps() {
+    const roots = document.querySelectorAll<HTMLElement>('[data-event-map]:not([data-map-ready])');
+    if (!roots.length) return;
+    for (const root of roots) {
+      root.dataset.mapReady = 'loading';
+      const canvas = root.querySelector<HTMLElement>('[data-map-canvas]');
+      if (!canvas) { root.dataset.mapReady = 'empty'; continue; }
+      let features: any[] = [];
+      try {
+        const response = await fetch('/generated/places.geojson', { credentials:'same-origin' });
+        if (!response.ok) throw new Error('GeoJSON unavailable');
+        const data = await response.json();
+        const locale = root.dataset.locale;
+        // The map and its prerendered HTML list represent the same complete edition.
+        // A ?person= query cannot filter a prerendered no-JS list, so ignore it.
+        features = (data.features ?? []).filter((feature: any) => feature.properties.locale === locale);
+        if (!features.length) { root.dataset.mapReady = 'empty'; continue; }
+        const {default: maplibregl} = await import('maplibre-gl');
+        const points = new Map<string, {coords: [number,number]; label: string; events: any[]}>();
+        for (const feature of features) {
+          const coords = feature.geometry.coordinates as [number,number];
+          if (!Array.isArray(coords) || coords.length !== 2 || !coords.every(Number.isFinite)) continue;
+          const key = coords.join(',');
+          const group = points.get(key) ?? {coords,label:feature.properties.placeTitle,events:[]};
+          if (!group.events.some((event)=>event.id===feature.properties.eventId)) {
+            group.events.push({id:feature.properties.eventId,title:feature.properties.eventTitle,url:feature.properties.eventUrl});
+          }
+          points.set(key,group);
+        }
+        if (!points.size) { root.dataset.mapReady = 'empty'; continue; }
+        const first = [...points.values()][0];
+        const map = new maplibregl.Map({
+          container:canvas,
+          style:'https://tiles.openfreemap.org/styles/bright',
+          center:first.coords,
+          zoom:points.size===1?6:2,
+          attributionControl:true,
+        });
+        map.scrollZoom.disable();
+        map.addControl(new maplibregl.NavigationControl({showCompass:false}),'top-right');
+        const bounds = new maplibregl.LngLatBounds();
+        for (const point of points.values()) {
+          const popup = document.createElement('div');
+          const name = document.createElement('strong'); name.textContent = point.label; popup.append(name);
+          const list = document.createElement('ul');
+          for (const event of point.events) {
+            const li=document.createElement('li'), a=document.createElement('a');
+            a.href=event.url; a.textContent=event.title; li.append(a); list.append(li);
+          }
+          popup.append(list);
+          new maplibregl.Marker().setLngLat(point.coords)
+            .setPopup(new maplibregl.Popup({offset:20}).setDOMContent(popup)).addTo(map);
+          bounds.extend(point.coords);
+        }
+        map.once('load',()=>{if(points.size>1)map.fitBounds(bounds,{padding:42,maxZoom:8,duration:0});});
+        document.addEventListener('astro:before-swap',()=>map.remove(),{once:true});
+        root.dataset.mapReady = 'true';
+      } catch (error) {
+        root.dataset.mapReady = 'failed'; // The static list remains available.
+        console.warn('Event map unavailable; use the linked event list.',error);
+      }
+    }
+  }
+  void renderMaps();
+  document.addEventListener('astro:page-load', () => void renderMaps());
+</script>
+
+<style>
+  .sves-map-note, .sves-map-fallback { color: var(--sl-color-gray-3); font-size: var(--sl-text-sm); }
+  .sves-map-canvas {
+    width:100%;
+    height:clamp(22rem,55vh,42rem);
+    border:1px solid var(--sl-color-gray-5);
+    border-radius:0.6rem;
+    overflow:hidden;
+    background:var(--sl-color-bg);
+  }
+  .sves-mapped-events { padding-inline-start:1.35rem; }
+  .sves-mapped-events li { margin-block:0.45rem; }
+  @media (max-width: 40rem) { .sves-map-canvas { height:25rem; } }
+</style>

@@ -1,0 +1,11 @@
+---
+import DefaultMarkdownContent from '@astrojs/starlight/components/MarkdownContent.astro';
+import EntitySections from './EntitySections.astro';
+const route = Astro.locals.starlightRoute;
+const showSections = Boolean(route.entry.data.entityId && ['person','event','place'].includes(route.entry.data.entity));
+---
+<DefaultMarkdownContent>
+  <slot />
+  {route.entry.data.entityId && <span hidden data-entity-id={route.entry.data.entityId}></span>}
+  {showSections && <EntitySections />}
+</DefaultMarkdownContent>

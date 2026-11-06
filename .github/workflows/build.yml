@@ -19,9 +19,15 @@ jobs:
           node-version: '24'
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      - name: Check structured content model
+        run: npm run test:model
       - name: Build static site
         run: npm run build
       - name: Check language isolation
         run: npm run test:i18n
       - name: Browser checks (mobile and desktop)
         run: npm run test:ui
+      - name: Synthetic entity layout and map integration
+        run: npm run test:integration
+      - name: Live development entity refresh
+        run: npm run test:dev
