@@ -27,3 +27,5 @@ jobs:
         run: npm run test:i18n
       - name: Browser checks (mobile and desktop)
         run: npm run test:ui
+      - name: Synthetic entity layout and map integration
+        run: npm run test:integration
