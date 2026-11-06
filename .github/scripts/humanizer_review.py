@@ -629,14 +629,20 @@ def inline(value: object, limit: int = 230) -> str:
     return s[: limit - 1] + "…" if len(s) > limit else s
 
 
-def report(paths: list[str], base_root: Path, head_root: Path, ru_root: Path, sr_root: Path) -> str:
+def report(paths: list[str | dict[str, str]], base_root: Path, head_root: Path,
+           ru_root: Path, sr_root: Path) -> str:
     groups: dict[str, list[tuple[str, list[dict]]]] = {"ru": [], "sr": []}
     ru = sr = None
-    for file in paths:
+    for entry in paths:
+        # Keep the base identity for pure renames. If a file moves across
+        # languages, review it as a new article in the destination language.
+        file = entry if isinstance(entry, str) else entry["head"]
+        previous = file if isinstance(entry, str) else entry.get("base", file)
         lang = language(file)
         if lang is None:
             continue
-        before = prose_only(read_article(base_root, file))
+        before = (prose_only(read_article(base_root, previous))
+                  if language(previous) == lang else "")
         after = prose_only(read_article(head_root, file))
         if not after or after == before:
             continue
@@ -984,7 +990,8 @@ def main() -> int:
         return 0
     if not all((args.files, args.base_root, args.head_root, args.russian_root, args.serbian_root, args.output)):
         parser.error("Review requires all root, file list and output arguments")
-    paths = [p.strip() for p in args.files.read_text(encoding="utf-8").splitlines() if p.strip()]
+    paths = [json.loads(row) for row in args.files.read_text(encoding="utf-8").splitlines()
+             if row.strip()]
     result = report(paths, args.base_root, args.head_root, args.russian_root, args.serbian_root)
     args.output.write_text(result, encoding="utf-8")
     print(result)
