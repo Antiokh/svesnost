@@ -327,8 +327,15 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
         cursor += 2
         parens = 1
         title_quote = None
-        while cursor < len(text) and text[cursor] != "\n":
+        while cursor < len(text):
             char = text[cursor]
+            if char == "\n":
+                # CommonMark allows a title on the following line (but not
+                # a line break inside an unquoted link destination).
+                next_line = text[cursor + 1:].split("\n", 1)[0]
+                if not title_quote and not re.match(r"[ \t]*[\"']", next_line):
+                    cursor = len(text)
+                    continue
             if char == "\\" and cursor + 1 < len(text):
                 cursor += 2
                 continue
