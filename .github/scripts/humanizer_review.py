@@ -277,6 +277,31 @@ def mask_inline_dollar_math(chars: list[str]) -> None:
         else:
             pos += 1
 
+def mask_html_comments_in_line(
+    line: str, chars: list[str], offset: int, in_comment: bool
+) -> tuple[str, bool]:
+    """Mask HTML comments before Markdown block-state detection.
+
+    This helper is only called outside fenced code and block math. Keeping the
+    original length and newlines preserves all offsets for downstream masking.
+    """
+    masked = list(line)
+    pos = 0
+    while pos < len(line):
+        start = pos if in_comment else line.find("<!--", pos)
+        if start < 0:
+            break
+        close = line.find("-->", start)
+        end = len(line) if close < 0 else close + 3
+        hide(chars, offset + start, offset + end)
+        for index in range(start, end):
+            if masked[index] != "\n":
+                masked[index] = " "
+        in_comment = close < 0
+        pos = end
+    return "".join(masked), in_comment
+
+
 def prose_only(raw: str) -> str:
     text = body_without_frontmatter(raw)
     chars = list(text)
@@ -285,30 +310,47 @@ def prose_only(raw: str) -> str:
     in_math = None
     list_indents: list[tuple[int, int]] = []
     after_blank = False
+    in_html_comment = False
 
-    for line in text.splitlines(keepends=True):
+    for original_line in text.splitlines(keepends=True):
+        # HTML comments must be hidden before interpreting Markdown. Never
+        # start or finish an HTML comment inside an already-open code fence.
+        line = original_line
+        if not in_fence and not in_math:
+            line, in_html_comment = mask_html_comments_in_line(
+                original_line, chars, offset, in_html_comment
+            )
         trimmed = line.lstrip()
         indent = len(line) - len(trimmed)
-        list_marker = re.match(r"^( *)(?:[-*+]|\d+[.)])\s+", line)
-        if not trimmed.strip():
-            after_blank = bool(list_indents)
-        elif list_marker:
-            if indent >= 4 and not list_indents:
+        visible, quote_depth = _unquote_line(line)
+        quote_indent = len(visible) - len(visible.lstrip(" "))
+        # Code inside a blockquote uses the indentation AFTER the > marker.
+        # Leave code-fence contents and mathematical blocks to their own
+        # state machines, without updating the surrounding list context.
+        if not in_fence and not in_math and not in_html_comment:
+            list_marker = re.match(r"^( *)(?:[-*+]|\d+[.)])\s+", line)
+            if not trimmed.strip():
+                after_blank = bool(list_indents)
+            elif list_marker:
+                if indent >= 4 and not list_indents:
+                    hide(chars, offset, offset + len(line))
+                else:
+                    while list_indents and list_indents[-1][0] >= indent:
+                        list_indents.pop()
+                    list_indents.append((indent, len(list_marker.group(0))))
+                after_blank = False
+            elif quote_depth and quote_indent >= 4:
                 hide(chars, offset, offset + len(line))
+                after_blank = False
+            elif indent >= 4:
+                if (not list_indents or
+                        (after_blank and indent >= list_indents[-1][1] + 4)):
+                    hide(chars, offset, offset + len(line))
+                after_blank = False
             else:
-                while list_indents and list_indents[-1][0] >= indent:
-                    list_indents.pop()
-                list_indents.append((indent, len(list_marker.group(0))))
-            after_blank = False
-        elif indent >= 4:
-            if (not list_indents or
-                    (after_blank and indent >= list_indents[-1][1] + 4)):
-                hide(chars, offset, offset + len(line))
-            after_blank = False
-        else:
-            if list_indents and indent < list_indents[0][1]:
-                list_indents.clear()
-            after_blank = False
+                if list_indents and indent < list_indents[0][1]:
+                    list_indents.clear()
+                after_blank = False
 
         fence_text, quote_depth = _fence_line(line, list_indents)
         fence = FENCE.match(fence_text)
@@ -325,6 +367,10 @@ def prose_only(raw: str) -> str:
             hide(chars, offset, offset + len(line))
             if in_math in line:
                 in_math = None
+        elif in_html_comment:
+            # A comment can contain fence or math delimiters on their own
+            # lines; neither may change parser state.
+            pass
         elif fence:
             marker = fence.group(1)
             in_fence = (marker[0], len(marker), quote_depth)
