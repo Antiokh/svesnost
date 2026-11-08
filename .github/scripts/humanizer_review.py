@@ -827,14 +827,14 @@ def mask_inline_paren_math(chars: list[str]) -> None:
 
 
 def find_matching_raw_close(text: str, opening_end: int, tag: str, *,
-                            is_mdx: bool = True, view: str | None = None) -> int | None:
+                            is_mdx: bool = True) -> int | None:
     """Find a matching raw closing tag, ignoring protected/JSX tokens.
 
-    The optional shadow view masks inline code, fences, and MDX expressions
-    before the raw-container scan. A literal tag inside an expression must
-    never increment or decrement the nesting depth.
+    Raw containers treat fenced delimiters as literal text, so the opening
+    tag may be validated against a masked view, but the closing scanner
+    must read original content and skip JSX expressions itself.
     """
-    source = text if view is None else view
+    source = text
     tag_pattern = re.compile(r"</?([A-Za-z][\w.:-]*)(?=[\s/>])")
     depth = 1
     pos = opening_end
@@ -1193,7 +1193,7 @@ def mask_raw_elements_before_blocks(text: str, chars: list[str], is_mdx: bool = 
         end = end_tag(text, pos)
         if (tag.lower() in RAW_ELEMENTS and not view.startswith("</", pos)
                 and not text[pos:end].rstrip().endswith("/>")):
-            close_end = find_matching_raw_close(text, end, tag, is_mdx=is_mdx, view=view)
+            close_end = find_matching_raw_close(text, end, tag, is_mdx=is_mdx)
             stop = close_end if close_end is not None else len(text)
             hide(chars, pos, stop)
             pos = stop
@@ -1465,7 +1465,7 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
                 selfclosing = text[pos:end].rstrip().endswith("/>")
                 hide(chars, pos, end)
                 if tagname.lower() in RAW_ELEMENTS and not closing and not selfclosing:
-                    close_end = find_matching_raw_close(text, end, tagname, is_mdx=is_mdx, view="".join(chars))
+                    close_end = find_matching_raw_close(text, end, tagname, is_mdx=is_mdx)
                     if close_end is not None:
                         hide(chars, end, close_end)
                         end = close_end
