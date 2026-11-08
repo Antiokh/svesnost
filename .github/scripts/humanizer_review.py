@@ -836,21 +836,22 @@ def find_matching_raw_close(text: str, opening_end: int, tag: str, *,
     """
     source = text
     tag_pattern = re.compile(r"</?([A-Za-z][\w.:-]*)(?=[\s/>])")
+    token_pattern = re.compile(r"[<{]" if is_mdx else r"<")
     depth = 1
     pos = opening_end
     while pos < len(text):
-        start = source.find("<", pos)
-        brace = source.find("{", pos) if is_mdx else -1
-        if brace >= 0 and (start < 0 or brace < start):
-            if not is_markdown_escaped(source, brace):
-                expression_end = end_brace(text, brace)
-                if expression_end > brace and text[expression_end - 1] == "}":
+        token = token_pattern.search(source, pos)
+        if token is None:
+            return None
+        start = token.start()
+        if token.group() == "{":
+            if not is_markdown_escaped(source, start):
+                expression_end = end_brace(text, start)
+                if expression_end > start and text[expression_end - 1] == "}":
                     pos = expression_end
                     continue
-            pos = brace + 1
+            pos = start + 1
             continue
-        if start < 0:
-            return None
         if source.startswith("<!--", start):
             comment_end = source.find("-->", start + 4)
             if comment_end < 0:
