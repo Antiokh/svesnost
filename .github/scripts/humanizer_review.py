@@ -779,11 +779,25 @@ def mask_gfm_autolinks(chars: list[str]) -> None:
         pos = end
 
     source = "".join(chars)
+    # Escaped <mailto:...> and <name@domain> are visible Markdown
+    # literals, not autolinks. Do not re-mask their addresses as GFM emails.
+    escaped_angles = [
+        (m.start(), m.end())
+        for m in re.finditer(r"<[^\s<>]+>", source)
+        if is_markdown_escaped(source, m.start())
+    ]
+    protected_index = 0
     email = re.compile(
         r"(?<![A-Za-z0-9.+_-])(?:mailto:|xmpp:)?"
         r"[A-Za-z0-9.+_-]+@[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+"
     )
     for match in email.finditer(source):
+        while (protected_index < len(escaped_angles) and
+               escaped_angles[protected_index][1] <= match.start()):
+            protected_index += 1
+        if (protected_index < len(escaped_angles) and
+                escaped_angles[protected_index][0] <= match.start()):
+            continue
         end = match.end()
         if (source[end - 1] in "-_" or
                 (end < len(source) and source[end] in "-_")):
@@ -2918,7 +2932,8 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     for sample, hidden, visible in gfm_examples:
         extracted = prose_only(sample)
         assert hidden not in extracted and visible in extracted, (sample, extracted)
-    for literal in ("prefixwww.example.org/help", "broken@domain.co-", "not-an-email@foo"):
+    for literal in ("prefixwww.example.org/help", "broken@domain.co-", "not-an-email@foo",
+                    r"\<mailto:visible@example.org>", r"\<editor@example.org>"):
         assert literal in prose_only(literal), literal
     # Repeated schemes in a single token must not cause quadratic scanning.
     many_schemes = list("https://a" * 10000)
