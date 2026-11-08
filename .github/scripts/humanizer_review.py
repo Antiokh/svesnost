@@ -316,6 +316,15 @@ def mask_inline_dollar_math(chars: list[str]) -> None:
         end = pos + 1 + match.end()
         trailing = text[end:end + 1]
         if trailing in ("/", "–", "—", "-"):
+            # A range without a second currency sign ($100–200) and a
+            # per-unit price ($100/час) remain prose even before later math.
+            numeric_tail = re.match(r"\s*\d+(?:[.,]\d+)*", text[end + 1:])
+            if numeric_tail:
+                after = text[end + 1 + numeric_tail.end():end + 2 + numeric_tail.end()]
+                if after != "$":  # $2-2$ and $2/2$ are still math.
+                    return True
+            if trailing == "/" and re.match(r"[^\W\d_]+", text[end + 1:]):
+                return True
             next_dollar = text.find("$", end + 1)
             return (next_dollar >= 0 and "\n" not in text[end:next_dollar]
                     and next_dollar + 1 < len(text)
@@ -705,9 +714,11 @@ def mask_uri_autolinks(chars: list[str]) -> None:
 
 
 def mask_bare_urls(chars: list[str]) -> None:
-    """Mask bare URLs through balanced parentheses without swallowing prose."""
+    """Mask http(s) URLs in one pass, without rescanning nested schemes."""
     text = "".join(chars)
-    for match in re.finditer(r"https?://", text):
+    pattern = re.compile(r"https?://")
+    pos = 0
+    while match := pattern.search(text, pos):
         start = match.start()
         end = match.end()
         parens = 0
@@ -726,7 +737,58 @@ def mask_bare_urls(chars: list[str]) -> None:
                 continue
             end += 1
         hide(chars, start, end)
+        pos = end  # Ignore every nested https:// inside this URL token.
 
+
+def mask_gfm_autolinks(chars: list[str]) -> None:
+    """Mask extended GFM www/email autolinks but retain adjacent punctuation."""
+    source = "".join(chars)
+
+    def trim_url_tail(start: int, end: int) -> int:
+        unmatched_close = (source[start:end].count(")") -
+                           source[start:end].count("("))
+        while end > start:
+            if source[end - 1] in "?!.,:*_~":
+                end -= 1
+            elif source[end - 1] == ")" and unmatched_close > 0:
+                unmatched_close -= 1
+                end -= 1
+            else:
+                break
+        # A trailing '&name;' is an entity, not part of the URL.
+        entity = re.search(r"&[A-Za-z0-9]+;$", source[start:end])
+        return start + entity.start() if entity else end
+
+    # A www autolink begins after whitespace or one of *_~( and contains
+    # at least two domain separators, with no '_' in its last two labels.
+    domain = re.compile(r"www\.(?:[A-Za-z0-9_-]+\.)+[A-Za-z0-9_-]+")
+    pos = 0
+    while match := domain.search(source, pos):
+        start = match.start()
+        pos = match.end()
+        if (start and not source[start - 1].isspace()
+                and source[start - 1] not in "*_~("):
+            continue
+        labels = match.group().split(".")
+        if "_" in labels[-1] or "_" in labels[-2]:
+            continue
+        end = match.end()
+        while end < len(source) and not source[end].isspace() and source[end] != "<":
+            end += 1
+        hide(chars, start, trim_url_tail(start, end))
+        pos = end
+
+    source = "".join(chars)
+    email = re.compile(
+        r"(?<![A-Za-z0-9.+_-])(?:mailto:|xmpp:)?"
+        r"[A-Za-z0-9.+_-]+@[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+"
+    )
+    for match in email.finditer(source):
+        end = match.end()
+        if (source[end - 1] in "-_" or
+                (end < len(source) and source[end] in "-_")):
+            continue
+        hide(chars, match.start(), end)
 
 def mask_inline_paren_math(chars: list[str]) -> None:
     """Exclude balanced TeX \(...\), not escaped Markdown literal \\(."""
@@ -750,32 +812,47 @@ def mask_inline_paren_math(chars: list[str]) -> None:
 
 
 
-def find_matching_raw_close(text: str, opening_end: int, tag: str) -> int | None:
-    """Find the corresponding closing tag, respecting nested same-name tags."""
+def find_matching_raw_close(text: str, opening_end: int, tag: str, *,
+                            is_mdx: bool = True, view: str | None = None) -> int | None:
+    """Find a matching raw closing tag, ignoring protected/JSX tokens.
+
+    The optional shadow view masks inline code, fences, and MDX expressions
+    before the raw-container scan. A literal tag inside an expression must
+    never increment or decrement the nesting depth.
+    """
+    source = text if view is None else view
     tag_pattern = re.compile(r"</?([A-Za-z][\w.:-]*)(?=[\s/>])")
     depth = 1
     pos = opening_end
     while pos < len(text):
-        start = text.find("<", pos)
+        start = source.find("<", pos)
+        brace = source.find("{", pos) if is_mdx else -1
+        if brace >= 0 and (start < 0 or brace < start):
+            if not is_markdown_escaped(source, brace):
+                expression_end = end_brace(text, brace)
+                if expression_end > brace and text[expression_end - 1] == "}":
+                    pos = expression_end
+                    continue
+            pos = brace + 1
+            continue
         if start < 0:
             return None
-        if text.startswith("<!--", start):
-            comment_end = text.find("-->", start + 4)
+        if source.startswith("<!--", start):
+            comment_end = source.find("-->", start + 4)
             if comment_end < 0:
                 return None
             pos = comment_end + 3
             continue
-        match = tag_pattern.match(text, start)
+        match = tag_pattern.match(source, start)
         if not match:
             pos = start + 1
             continue
-        # Consume a complete element tag before matching names, so
-        # </table> and <!-- inside quoted attributes cannot act as tokens.
+        # end_tag consumes quoted attributes and their embedded markup.
         end = end_tag(text, start)
         if end <= start or end == len(text) and ">" not in text[start:end]:
             return None
         if match.group(1).casefold() == tag.casefold():
-            if text.startswith("</", start):
+            if source.startswith("</", start):
                 depth -= 1
                 if depth == 0:
                     return end
@@ -783,7 +860,6 @@ def find_matching_raw_close(text: str, opening_end: int, tag: str) -> int | None
                 depth += 1
         pos = end
     return None
-
 
 def mask_fenced_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None:
     """Mask code fences including list-indented and quoted Markdown fences.
@@ -1103,7 +1179,7 @@ def mask_raw_elements_before_blocks(text: str, chars: list[str], is_mdx: bool = 
         end = end_tag(text, pos)
         if (tag.lower() in RAW_ELEMENTS and not view.startswith("</", pos)
                 and not text[pos:end].rstrip().endswith("/>")):
-            close_end = find_matching_raw_close(text, end, tag)
+            close_end = find_matching_raw_close(text, end, tag, is_mdx=is_mdx, view=view)
             stop = close_end if close_end is not None else len(text)
             hide(chars, pos, stop)
             pos = stop
@@ -1375,7 +1451,7 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
                 selfclosing = text[pos:end].rstrip().endswith("/>")
                 hide(chars, pos, end)
                 if tagname.lower() in RAW_ELEMENTS and not closing and not selfclosing:
-                    close_end = find_matching_raw_close(text, end, tagname)
+                    close_end = find_matching_raw_close(text, end, tagname, is_mdx=is_mdx, view="".join(chars))
                     if close_end is not None:
                         hide(chars, end, close_end)
                         end = close_end
@@ -1422,6 +1498,7 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
             hide(chars, label_start + 1 + len(match.group(2)), end)
     cleaned = "".join(chars)
     mask_bare_urls(chars)
+    mask_gfm_autolinks(chars)
     for match in re.finditer(r"\[\^[^\]\n]+\](?=:?)", cleaned):
         hide(chars, *match.span())
     mask_markdown_line_prefixes(chars)
@@ -2109,6 +2186,19 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "Видимый абзац после таблицы" in extracted, extracted
     assert "СЕКРЕТ ВНУТРИ ЯЧЕЙКИ" not in extracted, extracted
 
+    # JSX expressions containing raw-looking tag strings must not change
+    # the nesting depth of the actual pre/table container.
+    inline_jsx_pre = "<pre>{'<pre>'}</pre>\nВидимый абзац после примера.\n"
+    pre_prose = prose_only(inline_jsx_pre)
+    assert "Видимый абзац после примера" in pre_prose, pre_prose
+    inline_jsx_table = (
+        "<table><tr><td>{'</table>'}СЕКРЕТ_В_ЯЧЕЙКЕ</td></tr></table>\n"
+        "Видимый абзац после таблицы.\n"
+    )
+    table_prose = prose_only(inline_jsx_table)
+    assert "СЕКРЕТ_В_ЯЧЕЙКЕ" not in table_prose, table_prose
+    assert "Видимый абзац после таблицы" in table_prose, table_prose
+
     # Escaped Markdown delimiters remain readable: neither \{ nor \<!--
     # may start an MDX expression or HTML comment that eats later paragraphs.
     literal_delimiters = (
@@ -2624,6 +2714,17 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
             assert amount in extracted, ("currency masked as math", original, extracted)
     assert "2+2" not in prose_only("Математика $2+2$ остаётся формулой.")
 
+    for mixed in (
+        "Стоимость $100–200, формула $E=mc^2$ применима.",
+        "Стоимость $100/час, формула $E=mc^2$ применима.",
+        "Цена $100 - 200, формула $E=mc^2$ применима.",
+    ):
+        mixed_prose = prose_only(mixed)
+        assert "$100" in mixed_prose and "формула" in mixed_prose, mixed_prose
+        assert "применима" in mixed_prose and "E=mc^2" not in mixed_prose, mixed_prose
+    for arithmetic in ("$2-2$", "$2/2$"):
+        assert "$2" not in prose_only("Формула " + arithmetic + " записана."), arithmetic
+
     # Footnote definitions can contain indented, reader-visible continuation
     # lines, even after a blank line. A later independent indented code block
     # must still be suppressed after the definition's unindented prose ends.
@@ -2802,6 +2903,27 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     math_prose = prose_only(math_with_fence)
     assert "СКРЫТАЯ МАТЕМАТИКА" not in math_prose, math_prose
     assert "Видимый абзац после формулы" in math_prose, math_prose
+
+    # GFM §6.9: www and email autolinks without angle brackets are metadata.
+    gfm_examples = (
+        ("См. www.example.org/help, затем дальше.",
+         "www.example.org/help", "затем дальше"),
+        ("Контакт editor@example.org для связи.",
+         "editor@example.org", "для связи"),
+        ("(www.example.org/a(b)) рядом",
+         "www.example.org/a(b)", "рядом"),
+        ("Почта mailto:editor@example.org и xmpp:test@sub.example.org.",
+         "mailto:editor@example.org", "Почта"),
+    )
+    for sample, hidden, visible in gfm_examples:
+        extracted = prose_only(sample)
+        assert hidden not in extracted and visible in extracted, (sample, extracted)
+    for literal in ("prefixwww.example.org/help", "broken@domain.co-", "not-an-email@foo"):
+        assert literal in prose_only(literal), literal
+    # Repeated schemes in a single token must not cause quadratic scanning.
+    many_schemes = list("https://a" * 10000)
+    mask_bare_urls(many_schemes)
+    assert not "".join(many_schemes).strip()
 
     lengthy = "Повторение фрагмента " * 15
     from types import SimpleNamespace
