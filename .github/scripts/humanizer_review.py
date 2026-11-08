@@ -12,6 +12,7 @@ import importlib.util
 import json
 import re
 import sys
+from bisect import bisect_left
 from collections import Counter
 from pathlib import Path
 
@@ -421,12 +422,42 @@ def valid_inline_link_payload(payload: str) -> bool:
     return False
 
 
+def markdown_code_spans(text: str) -> list[tuple[int, int]]:
+    """Identify paired CommonMark code spans without quadratic rescanning."""
+    runs = list(re.finditer(r"`+", text))
+    next_end: dict[int, int] = {}
+    matches: dict[int, int] = {}
+    for run in reversed(runs):
+        if is_markdown_escaped(text, run.start()):
+            continue
+        width = run.end() - run.start()
+        if width in next_end:
+            matches[run.start()] = next_end[width]
+        next_end[width] = run.end()
+    spans: list[tuple[int, int]] = []
+    skip_until = 0
+    for run in runs:
+        if run.start() < skip_until:
+            continue
+        end = matches.get(run.start())
+        if end is not None:
+            spans.append((run.start(), end))
+            skip_until = end
+    return spans
+
+
 def markdown_bracket_pairs(text: str) -> dict[int, int]:
-    """Match link-label brackets in one pass, even for unclosed '[' runs."""
+    """Match link-label brackets, skipping code spans and escaped delimiters."""
     pairs: dict[int, int] = {}
     stack: list[int] = []
+    code_spans = markdown_code_spans(text)
+    code_index = 0
     index = 0
     while index < len(text):
+        if code_index < len(code_spans) and index == code_spans[code_index][0]:
+            index = code_spans[code_index][1]
+            code_index += 1
+            continue
         char = text[index]
         if char == "\\" and index + 1 < len(text):
             index += 2
@@ -444,6 +475,27 @@ def markdown_bracket_pairs(text: str) -> dict[int, int]:
     return pairs
 
 
+def markdown_raw_paren_openers(text: str) -> set[int]:
+    """Find structurally matched parens for fast rejection of broken links.
+
+    Quoted titles and angle destinations can have unbalanced literal parens,
+    so an absent raw match is only decisive without either form.
+    """
+    stack: list[int] = []
+    matched: set[int] = set()
+    index = 0
+    while index < len(text):
+        if text[index] == "\\" and index + 1 < len(text):
+            index += 2
+            continue
+        if text[index] == "(":
+            stack.append(index)
+        elif text[index] == ")" and stack:
+            matched.add(stack.pop())
+        index += 1
+    return matched
+
+
 def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
     """Find complete inline links/images, balancing destination parentheses.
 
@@ -452,11 +504,11 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
     """
     spans = []
     pairs = markdown_bracket_pairs(text)
-    # A link target longer than 8 KiB is not a practical review URL. Bound
-    # each candidate scan to avoid quadratic work on repeated malformed
-    # '[a](' patterns; precompute the next ')' for O(1) fast rejection of
-    # candidates without any closer in the bounded suffix.
-    target_limit = 8192
+    # Long URLs and data: images are valid Markdown and must be fully masked.
+    # Precompute raw matching parens to reject clearly unclosed candidates
+    # without repeatedly scanning their long malformed suffixes.
+    raw_paired_openers = markdown_raw_paren_openers(text)
+    title_starts = [m.start() for m in re.finditer(r"[ \t\r\n]['\"]", text)]
     next_close = [-1] * (len(text) + 1)
     following_close = -1
     for index in range(len(text) - 1, -1, -1):
@@ -478,10 +530,21 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
             pos += 1
             continue
         cursor = label_end + 2
-        scan_end = min(len(text), cursor + target_limit)
-        if next_close[cursor] < 0 or next_close[cursor] >= scan_end:
+        opener = label_end + 1
+        if next_close[cursor] < 0:
             pos += 1
             continue
+        if opener not in raw_paired_openers:
+            # Angle destinations and quoted titles may have unmatched
+            # literal parentheses; those still need a complete parse.
+            prefix = text[cursor:cursor + 64].lstrip(" \t")
+            hint = bisect_left(title_starts, cursor)
+            possible_title = (hint < len(title_starts)
+                              and title_starts[hint] < next_close[cursor])
+            if not prefix.startswith("<") and not possible_title:
+                pos += 1
+                continue
+        scan_end = len(text)
         parens = 1
         title_quote = None
         angle_destination = False
@@ -689,6 +752,49 @@ def mask_shortcut_reference_images(chars: list[str], labels: set[str]) -> None:
         if (not is_markdown_escaped(source, match.start())
                 and normalize_reference_label(match.group(1)) in labels):
             hide(chars, *match.span())
+
+
+def mask_full_reference_links(chars: list[str], labels: set[str]) -> None:
+    """Mask identifiers of resolved full references, including nested labels.
+
+    Markdown link text may contain balanced brackets and code spans; a flat
+    regular expression would leak reference IDs from such links.
+    """
+    if not labels:
+        return
+    source = "".join(chars)
+    pairs = markdown_bracket_pairs(source)
+    pos = 0
+    while pos < len(source):
+        image = (source.startswith("![", pos)
+                 and not is_markdown_escaped(source, pos))
+        bracket = pos + 1 if image else pos
+        if (bracket >= len(source) or source[bracket] != "["
+                or is_markdown_escaped(source, bracket)):
+            pos += 1
+            continue
+        label_end = pairs.get(bracket)
+        if (label_end is None or label_end + 1 >= len(source)
+                or source[label_end + 1] != "["):
+            pos += 1
+            continue
+        reference_start = label_end + 1
+        reference_end = pairs.get(reference_start)
+        if reference_end is None:
+            pos += 1
+            continue
+        reference_label = source[reference_start + 1:reference_end]
+        if not reference_label:
+            reference_label = source[bracket + 1:label_end]
+        if normalize_reference_label(reference_label) not in labels:
+            pos += 1
+            continue
+        if image:
+            hide(chars, pos, reference_end + 1)
+        else:
+            hide(chars, bracket, bracket + 1)
+            hide(chars, label_end, reference_end + 1)
+        pos = reference_end + 1
 
 
 def mask_uri_autolinks(chars: list[str]) -> None:
@@ -1493,24 +1599,10 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
     # Reference-style links and resolved shortcut-reference images are masked
     # here; unknown ![literal] labels are left as reader-visible text.
     mask_shortcut_reference_images(chars, reference_labels)
-    cleaned = "".join(chars)
-    # Markdown reference links preserve their visible label, not [reference-id].
-    # Images are not body prose, including reference-style image labels.
-    for match in re.finditer(r"(!?)\[([^\]\n]+)\]\[([^\]\n]*)\]", cleaned):
-        label = match.group(3) or match.group(2)
-        if normalize_reference_label(label) not in reference_labels:
-            continue  # Unresolved image/links are reader-visible literals.
-        start, end = match.span()
-        has_bang = match.group(1) == "!"
-        is_image = has_bang and not is_markdown_escaped(cleaned, start)
-        if is_image:
-            hide(chars, start, end)
-        else:
-            # The escaped ! remains visible; the following [label][ref]
-            # is an ordinary reference link whose label is reader prose.
-            label_start = start + int(has_bang)
-            hide(chars, label_start, label_start + 1)
-            hide(chars, label_start + 1 + len(match.group(2)), end)
+    # Resolved reference links keep visible text and hide technical IDs.
+    # For images, even the alt text is excluded. Balanced nested labels
+    # are parsed using the same bracket matcher as inline links.
+    mask_full_reference_links(chars, reference_labels)
     cleaned = "".join(chars)
     mask_bare_urls(chars)
     mask_gfm_autolinks(chars)
@@ -1769,6 +1861,34 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
             assert fragment in extracted, ("link lost prose", fragment, extracted)
         for fragment in hidden:
             assert fragment not in extracted, ("link leaked metadata", fragment, extracted)
+    # A backtick code span with ']' cannot end the outer link label.
+    code_label = 'До [Ссылка `] ` и текст](/private/path "СЛУЖЕБНЫЙ TITLE") после.'
+    code_label_prose = prose_only(code_label)
+    for visible in ("До", "Ссылка", "и текст", "после"):
+        assert visible in code_label_prose, (visible, code_label_prose)
+    for hidden in ("/private/path", "СЛУЖЕБНЫЙ TITLE"):
+        assert hidden not in code_label_prose, (hidden, code_label_prose)
+    assert len(markdown_inline_links(code_label)) == 1, markdown_inline_links(code_label)
+    # Nested brackets may be present *inside* a code span as well.
+    code_brackets = "См. [Текст `[not a label]` после](/private/code)."
+    assert "/private/code" not in prose_only(code_brackets)
+    # Unmatched code delimiters remain ordinary link-label characters.
+    assert "[Текст" in prose_only("Видимый [Текст ` без пары.")
+    # Very long valid data: images must not leak alt text or base64.
+    long_image = "Начало ![СЕКРЕТНЫЙ ALT](data:image/png;base64," + "A" * 8200 + ") конец."
+    long_prose = prose_only(long_image)
+    assert "Начало" in long_prose and "конец." in long_prose, long_prose
+    assert "СЕКРЕТНЫЙ ALT" not in long_prose and "data:image" not in long_prose
+    assert "A" * 100 not in long_prose, long_prose[:200]
+    assert len(markdown_inline_links(long_image)) == 1
+    # Parentheses inside an overlength destination must still balance.
+    nested_long_link = "См. [Документ](/private/(" + "b" * 8200 + ")/page) далее."
+    nested_long_prose = prose_only(nested_long_link)
+    assert "Документ" in nested_long_prose and "далее" in nested_long_prose
+    assert "/private/" not in nested_long_prose and "b" * 100 not in nested_long_prose
+    # Repeated malformed link openers must remain inexpensive.
+    unmatched_targets_with_closer = "[a](" * 10000 + ")"
+    assert len(markdown_inline_links(unmatched_targets_with_closer)) <= 1
     img = prose_only("Вводный текст ![СЕКРЕТНЫЙ ALT](https://example.org/x_(y).png) конец.")
     assert "Вводный текст" in img and "конец" in img, img
     assert "СЕКРЕТНЫЙ" not in img and "example.org" not in img, img
@@ -2312,6 +2432,27 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     for expected in ("Видимые слова", "другие слова", "[missing]"):
         assert expected in unresolved_prose, (expected, unresolved_prose)
 
+    # Full references with balanced nested link labels must hide the
+    # technical ID without dropping visible label text.
+    nested_reference = (
+        "См. [Текст [в скобках]][ref] и [ещё `] ` текст][ref].\n\n"
+        "[ref]: /private/path\n"
+    )
+    nested_reference_prose = prose_only(nested_reference)
+    for value in ("Текст [в скобках]", "ещё", "текст"):
+        assert value in nested_reference_prose, (value, nested_reference_prose)
+    for hidden in ("[ref]", "/private/path"):
+        assert hidden not in nested_reference_prose, (hidden, nested_reference_prose)
+    nested_image = (
+        "Начало ![СЕКРЕТНЫЙ [ALT]][cover] конец.\n\n"
+        "[cover]: /private/image.png\n"
+    )
+    nested_image_prose = prose_only(nested_image)
+    assert "Начало" in nested_image_prose and "конец." in nested_image_prose
+    for hidden in ("СЕКРЕТНЫЙ", "[cover]", "/private/image.png"):
+        assert hidden not in nested_image_prose, nested_image_prose
+    # An unknown reference is visible Markdown, not metadata.
+    assert "[missing]" in prose_only("См. [Текст [в скобках]][missing].")
     # Shortcut image references are images only when their label resolves.
     shortcut = (
         "Видимый текст до.\n"
