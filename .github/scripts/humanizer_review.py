@@ -1435,14 +1435,15 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
     mask_indented_code_before_blocks(text, chars, paragraph_lines, mdx_prose_lines)
     mask_raw_elements_before_blocks(text, chars, is_mdx)
     mask_fenced_blocks(text, chars, is_mdx)
-    # The subsequent block scanner must not reinterpret inline-code literals
-    # as display-math or fenced-code markers.
-    for start, end in markdown_code_spans("".join(chars)):
-        hide(chars, start, end)
     if is_mdx:
         mask_mdx_esm(text, chars)
     reference_labels = mask_reference_definitions(text, chars)
     block_text = "".join(chars)
+    # The block scanner must see the original column positions: hiding
+    # inline code first would make visible text after a closing backtick
+    # look like indented code. Guard only actual math marker locations.
+    code_spans = markdown_code_spans(block_text)
+    code_index = 0
     offset = 0
     in_fence = None
     in_math = None
@@ -1528,6 +1529,16 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
         math_list = re.match(r"^(?:[-*+]|\d+[.)])\s+", math_text)
         if math_list:
             math_text = math_text[math_list.end():]
+        code_math = False
+        if math_text.startswith((chr(36) * 2, r"\[")):
+            candidate = line.find(math_text)
+            if candidate >= 0:
+                marker_pos = offset + candidate
+                while code_index < len(code_spans) and code_spans[code_index][1] <= marker_pos:
+                    code_index += 1
+                code_math = (code_index < len(code_spans)
+                             and code_spans[code_index][0] < marker_pos
+                             and marker_pos < code_spans[code_index][1])
         # The active block wins. A math delimiter inside fenced code is code,
         # and a code fence inside a math block must not affect block state.
         if in_fence and quote_depth < in_fence[2]:
@@ -1554,7 +1565,7 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
             marker = fence.group(1)
             in_fence = (marker[0], len(marker), quote_depth)
             hide(chars, offset, offset + len(line))
-        elif math_text.startswith((chr(36) * 2, r"\[")):
+        elif not code_math and math_text.startswith((chr(36) * 2, r"\[")):
             hide(chars, offset, offset + len(line))
             closing = chr(36) * 2 if math_text.startswith(chr(36) * 2) else r"\]"
             if closing not in math_text[2:]:
