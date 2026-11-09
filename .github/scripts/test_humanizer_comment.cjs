@@ -62,16 +62,29 @@ assert.ok(workflow.includes("JSON.stringify({"));
 assert.ok(workflow.includes("id: snapshot"));
 assert.ok(workflow.includes("for attempt in 1 2 3"));
 assert.ok(workflow.includes("trap report_unavailable ERR"));
+// Every stage, including both checkouts, must invalidate a stale report.
+// The first integration PR intentionally has no trusted adapter, but only
+// successful checkouts may use that first-PR exception.
+assert.ok(workflow.includes("id: checkout_base"));
+assert.ok(workflow.includes("id: checkout_head"));
+assert.ok(workflow.includes("steps.checkout_base.outcome != 'success'"));
+assert.ok(workflow.includes("steps.checkout_head.outcome != 'success'"));
+assert.ok(workflow.includes("fs.existsSync(helperPath)"));
+assert.ok(workflow.includes("item?.user?.login === 'github-actions[bot]'"));
 // Every stage must be considered when deciding whether the existing report
 // still represents this PR HEAD. A failure must replace the old report.
 for (const fragment of [
   "id: selection",
   "id: editors",
   "id: finalize",
+  "BASE_CHECKOUT_OUTCOME: ${{ steps.checkout_base.outcome }}",
+  "HEAD_CHECKOUT_OUTCOME: ${{ steps.checkout_head.outcome }}",
   "SNAPSHOT_OUTCOME: ${{ steps.snapshot.outcome }}",
   "SELECTION_OUTCOME: ${{ steps.selection.outcome }}",
   "EDITORS_OUTCOME: ${{ steps.editors.outcome }}",
   "GENERATE_OUTCOME: ${{ steps.generate.outcome }}",
+  '[ "$BASE_CHECKOUT_OUTCOME" != success ]',
+  '[ "$HEAD_CHECKOUT_OUTCOME" != success ]',
   '[ "$SNAPSHOT_OUTCOME" != success ]',
   '[ "$SELECTION_OUTCOME" != success ]',
   '[ "$EDITORS_OUTCOME" != success ]',
@@ -84,6 +97,10 @@ for (const fragment of [
 }
 assert.ok(workflow.includes("always() &&"));
 
+// The base checkout can fail before the helper exists. The workflow must
+// contain a trusted, standalone fallback rather than relying on base files.
+assert.ok(workflow.includes("minimal trusted inline recovery code"));
+assert.ok(workflow.includes("isCurrentReviewHead = (expected, actual)"));
 // Execute the exact finalizer shell body with an isolated report path.
 // This checks both normal preservation and invalidation for each failed stage.
 const os = require("node:os");
@@ -103,6 +120,8 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), "humanizer-finalize-"));
 const reportPath = path.join(dir, "report.md");
 const initialReport = marker + "\nPrevious successful review\n";
 const successfulStages = {
+  BASE_CHECKOUT_OUTCOME: "success",
+  HEAD_CHECKOUT_OUTCOME: "success",
   SNAPSHOT_OUTCOME: "success",
   SELECTION_OUTCOME: "success",
   EDITORS_OUTCOME: "success",
