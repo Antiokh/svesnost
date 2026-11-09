@@ -3118,8 +3118,8 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     # Link-reference labels can contain an escaped closing bracket.
     # Neither a resolved reference's ID nor its definition is prose.
     escaped_reference = (
-        r'[ref\\]]: /internal "СЛУЖЕБНЫЙ ЗАГОЛОВОК"' + "\n\n"
-        + r'[Видимый текст][ref\\]]' + "\n"
+        r'[ref\]]: /internal "СЛУЖЕБНЫЙ ЗАГОЛОВОК"' + "\n\n"
+        + r'[Видимый текст][ref\]]' + "\n"
     )
     escaped_prose = prose_only(escaped_reference, is_mdx=False)
     assert "Видимый текст" in escaped_prose, escaped_prose
