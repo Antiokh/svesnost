@@ -996,7 +996,7 @@ def mask_fenced_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None
     in_math = None
     in_comment = False
     list_indents: list[tuple[int, int]] = []
-    # A code span may cross line boundaries. A standalone "$" or "\\["
+    # A code span may cross line boundaries. A standalone "$" or "\["
     # inside it is inline code, not a display-math opener. Protect the marker
     # while keeping real fenced-code state authoritative.
     code_spans = markdown_code_spans("".join(chars))
@@ -1029,7 +1029,7 @@ def mask_fenced_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None
         if math_list:
             math_text = math_text[math_list.end():]
         code_math = False
-        if math_text.startswith((chr(36) * 2, r"\\[")):
+        if math_text.startswith((chr(36) * 2, r"\[")):
             candidate = line.find(math_text)
             if candidate >= 0:
                 marker_pos = offset + candidate
@@ -3135,7 +3135,7 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
 
     # Multiline code spans can contain display-math markers on their own
     # line. The markers are code and must never eat the following prose.
-    for delimiter in (r"\\[", "$"):
+    for delimiter in (r"\[", "$"):
         code_math_sample = (
             "До кода `начало\n" + delimiter + "\nконец` и видимая проза.\n"
             "\nСледующий читательский абзац.\n"
