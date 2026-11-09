@@ -145,6 +145,7 @@ jobs:
           SELECTION_OUTCOME: ${{ steps.selection.outcome }}
           EDITORS_OUTCOME: ${{ steps.editors.outcome }}
           GENERATE_OUTCOME: ${{ steps.generate.outcome }}
+          REPORT_PATH: /tmp/humanizer-comment.md
         run: |
           # An outdated report must not appear to cover the current HEAD.
           # The successful run leaves the generated report untouched.
@@ -152,7 +153,7 @@ jobs:
              [ "$SELECTION_OUTCOME" != success ] ||
              [ "$EDITORS_OUTCOME" != success ] ||
              [ "$GENERATE_OUTCOME" != success ] ||
-             [ ! -s /tmp/humanizer-comment.md ]; then
+             [ ! -s "$REPORT_PATH" ]; then
             printf '%s\n' \
               '<!-- svesnost-humanizer-review -->' \
               '## Языковая редактура / Језичка редактура' \
@@ -160,7 +161,7 @@ jobs:
               'Проверка недоступна: один из этапов проверки завершился ошибкой.' \
               'Провера није доступна: једна од фаза провере је неуспешна.' \
               'Предыдущий отчёт не подтверждает текущий PR. Повторите проверку.' \
-              > /tmp/humanizer-comment.md
+              > "$REPORT_PATH"
           fi
       - name: Add review to Actions summary
         if: always() && steps.finalize.outcome == 'success'
