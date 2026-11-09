@@ -12,7 +12,6 @@ import importlib.util
 import json
 import re
 import sys
-from bisect import bisect_left
 from collections import Counter
 from pathlib import Path
 
@@ -516,13 +515,23 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
     # Precompute raw matching parens to reject clearly unclosed candidates
     # without repeatedly scanning their long malformed suffixes.
     raw_paired_openers = markdown_raw_paren_openers(text)
-    title_starts = [m.start() for m in re.finditer(r"[ \t\r\n]['\"]", text)]
     next_close = [-1] * (len(text) + 1)
+    next_space = [len(text)] * (len(text) + 1)
+    next_quote = {q: [-1] * (len(text) + 1) for q in ("'", '"')}
+    following_quote = {"'": -1, '"': -1}
     following_close = -1
+    following_space = len(text)
     for index in range(len(text) - 1, -1, -1):
         if text[index] == ")":
             following_close = index
+        if text[index].isspace():
+            following_space = index
+        if text[index] in following_quote and not is_markdown_escaped(text, index):
+            following_quote[text[index]] = index
         next_close[index] = following_close
+        next_space[index] = following_space
+        for q in following_quote:
+            next_quote[q][index] = following_quote[q]
     # An unclosed <destination> must not cause repeated scans of every
     # following candidate. Build an O(n) suffix index that only accepts a
     # closing unescaped '>' before any illegal '<' or line break.
@@ -563,9 +572,6 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
             # Angle destinations and quoted titles may have unmatched
             # literal parentheses; those still need a complete parse.
             first = next_nonspace[cursor]
-            hint = bisect_left(title_starts, cursor)
-            possible_title = (hint < len(title_starts)
-                              and title_starts[hint] < next_close[cursor])
             if first < len(text) and text[first] == "<":
                 angle_end = angle_destination_end[first + 1]
                 if angle_end < 0:
@@ -579,9 +585,25 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
                         or (trailer == angle_end + 1 and text[trailer] != ")")):
                     pos += 1
                     continue
-            elif not possible_title:
-                pos += 1
-                continue
+            else:
+                # When a raw ')' does not close this opener, a valid bare
+                # destination is only possible if literal parentheses inside
+                # a *closed quoted title* confused the raw parentheses stack.
+                # Validate the title boundary in O(1) using suffix indexes,
+                # rather than rescanning a long malformed suffix for each '['.
+                if first == len(text):
+                    pos += 1
+                    continue
+                destination_end = next_space[first]
+                title_start = next_nonspace[destination_end]
+                if title_start == len(text) or text[title_start] not in ("'", '"'):
+                    pos += 1
+                    continue
+                title_end = next_quote[text[title_start]][title_start + 1]
+                if (title_end < 0 or next_nonspace[title_end + 1] == len(text)
+                        or text[next_nonspace[title_end + 1]] != ")"):
+                    pos += 1
+                    continue
         scan_end = len(text)
         parens = 1
         title_quote = None
@@ -775,16 +797,24 @@ def mask_reference_definitions(text: str, chars: list[str]) -> set[str]:
     return labels
 
 def mask_shortcut_reference_images(chars: list[str], labels: set[str]) -> None:
-    """Only resolved ![alt] shortcuts are images; unknown labels stay text."""
+    """Mask resolved image shortcuts, including escaped or nested brackets."""
     if not labels:
         return
     source = "".join(chars)
-    for match in re.finditer(r"!\[([^\]\n]+)\](?!\(|\[)", source):
-        # \![label] is an escaped literal '!' followed by a visible
-        # shortcut reference link. Only an unescaped '!' opens an image.
-        if (not is_markdown_escaped(source, match.start())
-                and normalize_reference_label(match.group(1)) in labels):
-            hide(chars, *match.span())
+    pairs = markdown_bracket_pairs(source)
+    for match in re.finditer(r"!\[", source):
+        # \![label] is a literal '!' followed by a visible reference link.
+        if is_markdown_escaped(source, match.start()):
+            continue
+        label_open = match.start() + 1
+        label_end = pairs.get(label_open)
+        if label_end is None or (
+            label_end + 1 < len(source) and source[label_end + 1] in "(["
+        ):
+            continue  # Inline images and full references are handled elsewhere.
+        label = source[label_open + 1:label_end]
+        if normalize_reference_label(label) in labels:
+            hide(chars, match.start(), label_end + 1)
 
 
 def mask_full_reference_links(chars: list[str], labels: set[str]) -> None:
@@ -828,6 +858,28 @@ def mask_full_reference_links(chars: list[str], labels: set[str]) -> None:
             hide(chars, bracket, bracket + 1)
             hide(chars, label_end, reference_end + 1)
         pos = reference_end + 1
+
+
+def mask_footnote_identifiers(chars: list[str]) -> None:
+    """Hide defined footnote IDs; retain escaped literals and unresolved text."""
+    source = "".join(chars)
+    identifier = re.compile(r"\[\^((?:\\.|[^\]\\\n])+)\](?=:?)")
+    definitions: set[str] = set()
+    offset = 0
+    for line in source.splitlines(keepends=True):
+        visible, _ = _unquote_line(line)
+        definition = re.match(r"^ {0,3}\[\^((?:\\.|[^\]\\\n])+)\]:[ \t]*", visible)
+        if definition:
+            marker_at = offset + len(line.rstrip("\r\n")) - len(visible)
+            if not is_markdown_escaped(source, marker_at):
+                definitions.add(normalize_reference_label(definition.group(1)))
+        offset += len(line)
+    if not definitions:
+        return
+    for match in identifier.finditer(source):
+        if (not is_markdown_escaped(source, match.start())
+                and normalize_reference_label(match.group(1)) in definitions):
+            hide(chars, *match.span())
 
 
 def mask_uri_autolinks(chars: list[str]) -> None:
@@ -1686,11 +1738,9 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
     # For images, even the alt text is excluded. Balanced nested labels
     # are parsed using the same bracket matcher as inline links.
     mask_full_reference_links(chars, reference_labels)
-    cleaned = "".join(chars)
     mask_bare_urls(chars)
     mask_gfm_autolinks(chars)
-    for match in re.finditer(r"\[\^[^\]\n]+\](?=:?)", cleaned):
-        hide(chars, *match.span())
+    mask_footnote_identifiers(chars)
     mask_markdown_line_prefixes(chars)
     mask_inline_paren_math(chars)
 
@@ -2621,6 +2671,15 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     for excerpt in (escaped_prose, unescaped_prose):
         assert "/private/path" not in excerpt, excerpt
 
+    # Shortcut image labels obey CommonMark escapes and balanced brackets.
+    escaped_bracket_image = (
+        "![СЕКРЕТНЫЙ \\] ALT]\n\n"
+        "[СЕКРЕТНЫЙ \\] ALT]: /img.png\n"
+    )
+    escaped_bracket_prose = prose_only(escaped_bracket_image)
+    for hidden in ("СЕКРЕТНЫЙ", "ALT", "/img.png"):
+        assert hidden not in escaped_bracket_prose, escaped_bracket_prose
+
     # The full [label][ref] form follows the same escaped-! rule.
     full_escaped = "\\![Документ][ref]\n\n[ref]: /private/path\n"
     full_unescaped = "![Документ][ref]\n\n[ref]: /private/path\n"
@@ -3210,6 +3269,28 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     for literal in ("prefixwww.example.org/help", "broken@domain.co-", "not-an-email@foo",
                     r"\<mailto:visible@example.org>", r"\<editor@example.org>"):
         assert literal in prose_only(literal), literal
+    # Defined footnotes hide their IDs, but escaped/unresolved literals
+    # remain readable even if a different footnote definition exists.
+    footnote_literals = (
+        r"Пишите \[^буквальное] и [^неизвестное] в учебнике."
+        "\nТекст со сноской[^1].\n\n[^1]: Читательская проза сноски.\n"
+    )
+    footnote_result = prose_only(footnote_literals)
+    for visible in ("буквальное", "неизвестное", "Читательская проза сноски"):
+        assert visible in footnote_result, footnote_result
+    assert "[^1]" not in footnote_result, footnote_result
+
+    # A valid title can contain literal unbalanced '(' characters; its
+    # target remains masked even when a raw parentheses match is absent.
+    quoted_title = '[Документ](path "title with ( literal parenthesis")'
+    quoted_result = prose_only(quoted_title)
+    assert "Документ" in quoted_result and "literal parenthesis" not in quoted_result, quoted_result
+    assert markdown_inline_links(quoted_title), "Valid link with unbalanced title parentheses lost"
+    # Thousands of malformed links without a closed title should be skipped
+    # using the suffix indexes, not by scanning the shared remainder N times.
+    malformed_titles = '[a](path "title' * 5000 + ')'
+    assert markdown_inline_links(malformed_titles) == []
+
     # Repeated schemes in a single token must not cause quadratic scanning.
     many_schemes = list("https://a" * 10000)
     mask_bare_urls(many_schemes)
