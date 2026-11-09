@@ -41,8 +41,8 @@ assert.equal(isCurrentReviewHead(newHead, newHead), true);
 assert.equal(isCurrentReviewHead("", newHead), false);
 assert.equal(isCurrentReviewHead(undefined, newHead), false);
 
-// Concurrency is keyed by PR number, not by SHA or branch. Different pushes
-// on the same PR therefore cancel the previous run, without blocking others.
+// Content review runs are serialized by PR number. Metadata-only edits
+// get isolated groups, so they cannot cancel a content review.
 const workflow = fs.readFileSync(
   path.join(__dirname, "../workflows/humanizer-review.yml"),
   "utf8"
