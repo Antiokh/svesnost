@@ -86,6 +86,7 @@ jobs:
           test -n "$MERGE_BASE"
           git -C base worktree add --detach "$GITHUB_WORKSPACE/base-content" "$MERGE_BASE"
       - name: Select changed article files
+        id: selection
         if: steps.trusted.outputs.ready == 'true'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
@@ -112,6 +113,7 @@ jobs:
               }));
             fs.writeFileSync('/tmp/humanizer-files.txt', articles.join('\n'));
       - name: Fetch pinned language editors
+        id: editors
         if: steps.trusted.outputs.ready == 'true'
         run: |
           git init /tmp/humanizer_russian
@@ -135,17 +137,38 @@ jobs:
             --russian-root /tmp/humanizer_russian \
             --serbian-root /tmp/humanizer_serbian \
             --output /tmp/humanizer-comment.md
+      - name: Finalize report, including failures in any review stage
+        id: finalize
+        if: always() && steps.trusted.outputs.ready == 'true'
+        env:
+          SNAPSHOT_OUTCOME: ${{ steps.snapshot.outcome }}
+          SELECTION_OUTCOME: ${{ steps.selection.outcome }}
+          EDITORS_OUTCOME: ${{ steps.editors.outcome }}
+          GENERATE_OUTCOME: ${{ steps.generate.outcome }}
+        run: |
+          # An outdated report must not appear to cover the current HEAD.
+          # The successful run leaves the generated report untouched.
+          if [ "$SNAPSHOT_OUTCOME" != success ] ||
+             [ "$SELECTION_OUTCOME" != success ] ||
+             [ "$EDITORS_OUTCOME" != success ] ||
+             [ "$GENERATE_OUTCOME" != success ] ||
+             [ ! -s /tmp/humanizer-comment.md ]; then
+            printf '%s\n' \
+              '<!-- svesnost-humanizer-review -->' \
+              '## Языковая редактура / Језичка редактура' \
+              '' \
+              'Проверка недоступна: один из этапов проверки завершился ошибкой.' \
+              'Провера није доступна: једна од фаза провере је неуспешна.' \
+              'Предыдущий отчёт не подтверждает текущий PR. Повторите проверку.' \
+              > /tmp/humanizer-comment.md
+          fi
       - name: Add review to Actions summary
-        if: >-
-          always() &&
-          steps.trusted.outputs.ready == 'true' &&
-          (steps.snapshot.outcome == 'failure' || steps.generate.outcome == 'success')
+        if: always() && steps.finalize.outcome == 'success'
         run: cat /tmp/humanizer-comment.md >> "$GITHUB_STEP_SUMMARY"
       - name: Update PR review comment
         if: >-
           always() &&
-          steps.trusted.outputs.ready == 'true' &&
-          (steps.snapshot.outcome == 'failure' || steps.generate.outcome == 'success') &&
+          steps.finalize.outcome == 'success' &&
           github.event.pull_request.head.repo.full_name == github.repository &&
           github.actor != 'dependabot[bot]'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
