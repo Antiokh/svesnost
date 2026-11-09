@@ -371,9 +371,11 @@ def mask_inline_dollar_math(chars: list[str]) -> None:
 
 def valid_inline_link_payload(payload: str) -> bool:
     """Accept only a CommonMark destination and optional quoted title."""
-    if "\n\n" in payload or "\r\n\r\n" in payload:
+    if re.search(r"\r?\n[ \t]*\r?\n", payload):
         return False
-    value = payload.lstrip(" \t")
+    # CommonMark permits a soft line break before the destination, but not
+    # inside a bare destination or across a blank line.
+    value = payload.lstrip(" \t\r\n")
     if not value:
         return True
     if value[0] == "<":
@@ -557,14 +559,9 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
         destination_started = False
         while cursor < scan_end:
             char = text[cursor]
-            if char == "\n":
-                # CommonMark allows a title on the following line (but not
-                # a line break inside an unquoted destination). Bound the
-                # lookahead as well to avoid copying a huge input suffix.
-                next_line = text[cursor + 1:scan_end].split("\n", 1)[0]
-                if not title_quote and not re.match(r"[ \t]*[\"']", next_line):
-                    cursor = scan_end
-                    continue
+            # A line break may separate the destination from a closing ')' or
+            # precede the destination. valid_inline_link_payload() checks
+            # these boundaries and rejects newlines inside bare destinations.
             if char == "\\" and cursor + 1 < len(text):
                 cursor += 2
                 continue
@@ -999,6 +996,11 @@ def mask_fenced_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None
     in_math = None
     in_comment = False
     list_indents: list[tuple[int, int]] = []
+    # A code span may cross line boundaries. A standalone "$" or "\\["
+    # inside it is inline code, not a display-math opener. Protect the marker
+    # while keeping real fenced-code state authoritative.
+    code_spans = markdown_code_spans("".join(chars))
+    code_index = 0
     # Comments are masked before code fences, but markers inside an already
     # open fence are code literals rather than HTML comments.
     comment_lines = iter(html_comment_scan_view("".join(chars), is_mdx).splitlines(keepends=True))
@@ -1026,6 +1028,16 @@ def mask_fenced_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None
         math_list = re.match(r"^(?:[-*+]|\d+[.)])\s+", math_text)
         if math_list:
             math_text = math_text[math_list.end():]
+        code_math = False
+        if math_text.startswith((chr(36) * 2, r"\\[")):
+            candidate = line.find(math_text)
+            if candidate >= 0:
+                marker_pos = offset + candidate
+                while code_index < len(code_spans) and code_spans[code_index][1] <= marker_pos:
+                    code_index += 1
+                code_math = (code_index < len(code_spans)
+                             and code_spans[code_index][0] < marker_pos
+                             and marker_pos < code_spans[code_index][1])
         # A quote boundary ends an unfinished quoted code/math block.
         if in_fence and quote_depth < in_fence[2]:
             in_fence = None
@@ -1042,7 +1054,7 @@ def mask_fenced_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None
             hide(chars, offset, offset + len(line))
             if quote_depth == in_math[1] and in_math[0] in math_text:
                 in_math = None
-        elif not in_comment and math_text.startswith((chr(36) * 2, r"\[")):
+        elif not in_comment and not code_math and math_text.startswith((chr(36) * 2, r"\[")):
             closing = chr(36) * 2 if math_text.startswith(chr(36) * 2) else r"\]"
             hide(chars, offset, offset + len(line))
             if closing not in math_text[2:]:
@@ -1423,6 +1435,10 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
     mask_indented_code_before_blocks(text, chars, paragraph_lines, mdx_prose_lines)
     mask_raw_elements_before_blocks(text, chars, is_mdx)
     mask_fenced_blocks(text, chars, is_mdx)
+    # The subsequent block scanner must not reinterpret inline-code literals
+    # as display-math or fenced-code markers.
+    for start, end in markdown_code_spans("".join(chars)):
+        hide(chars, start, end)
     if is_mdx:
         mask_mdx_esm(text, chars)
     reference_labels = mask_reference_definitions(text, chars)
@@ -1927,6 +1943,23 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
             assert visible in extracted, ("multiline link lost prose", visible, extracted)
         for hidden in ("/materials/page", "СЕКРЕТНОЕ TITLE", "<!--"):
             assert hidden not in extracted, ("multiline link metadata leaked", hidden, extracted)
+
+    # A soft line break is also allowed BEFORE the link destination and
+    # between a complete destination and the closing parenthesis.
+    for sample in (
+        "До [Документ](/private/path\n) после.\nСледующий абзац.",
+        "До [Документ](\n/private/path) после.\nСледующий абзац.",
+        'До [Документ](\n/private/path\n "СЛУЖЕБНЫЙ TITLE") после.',
+    ):
+        found = markdown_inline_links(sample)
+        assert len(found) == 1, ("valid multiline destination not parsed", sample, found)
+        extracted = prose_only(sample)
+        for fragment in ("До", "Документ", "после"):
+            assert fragment in extracted, ("multiline destination lost prose", sample, extracted)
+        for hidden in ("/private/path", "СЛУЖЕБНЫЙ TITLE"):
+            assert hidden not in extracted, ("multiline destination leaked", sample, extracted)
+    assert not markdown_inline_links("См. [Документ](/private/\npath) далее.")
+    assert not markdown_inline_links("См. [Документ](\n\n/private/path) далее.")
 
     # CommonMark link text can span soft line breaks. The label remains
     # reader-visible but a relative target and title do not enter Humanizer.
@@ -3099,6 +3132,20 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert len(russian_new(
         SimpleNamespace(run_review=russian_excerpt_mock), "before", "after"
     )) == 1
+
+    # Multiline code spans can contain display-math markers on their own
+    # line. The markers are code and must never eat the following prose.
+    for delimiter in (r"\\[", "$"):
+        code_math_sample = (
+            "До кода `начало\n" + delimiter + "\nконец` и видимая проза.\n"
+            "\nСледующий читательский абзац.\n"
+        )
+        code_math_prose = prose_only(code_math_sample)
+        for visible in ("До кода", "и видимая проза", "Следующий читательский абзац"):
+            assert visible in code_math_prose, (
+                "inline-code math swallowed prose", delimiter, code_math_prose
+            )
+        assert delimiter not in code_math_prose, (delimiter, code_math_prose)
 
     # Backtick fences with a backtick in the info string are NOT code
     # fences under CommonMark §4.5. Do not consume the following prose.
