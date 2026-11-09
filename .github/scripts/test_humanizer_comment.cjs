@@ -62,8 +62,26 @@ assert.ok(workflow.includes("JSON.stringify({"));
 assert.ok(workflow.includes("id: snapshot"));
 assert.ok(workflow.includes("for attempt in 1 2 3"));
 assert.ok(workflow.includes("trap report_unavailable ERR"));
-assert.ok(workflow.includes("steps.snapshot.outcome == 'failure'"));
-assert.ok(workflow.includes("steps.generate.outcome == 'success'"));
+// Every stage must be considered when deciding whether the existing report
+// still represents this PR HEAD. A failure must replace the old report.
+for (const fragment of [
+  "id: selection",
+  "id: editors",
+  "id: finalize",
+  "SNAPSHOT_OUTCOME: ${{ steps.snapshot.outcome }}",
+  "SELECTION_OUTCOME: ${{ steps.selection.outcome }}",
+  "EDITORS_OUTCOME: ${{ steps.editors.outcome }}",
+  "GENERATE_OUTCOME: ${{ steps.generate.outcome }}",
+  '[ "$SNAPSHOT_OUTCOME" != success ]',
+  '[ "$SELECTION_OUTCOME" != success ]',
+  '[ "$EDITORS_OUTCOME" != success ]',
+  '[ "$GENERATE_OUTCOME" != success ]',
+  '[ ! -s /tmp/humanizer-comment.md ]',
+  "steps.finalize.outcome == 'success'",
+  "Проверка недоступна: один из этапов проверки завершился ошибкой.",
+]) {
+  assert.ok(workflow.includes(fragment), "Missing failure-path guard: " + fragment);
+}
 assert.ok(workflow.includes("always() &&"));
 
 console.log("Humanizer bot ownership and sequential synchronize safety: OK");
