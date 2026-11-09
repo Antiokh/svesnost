@@ -240,6 +240,12 @@ def _fence_line(line: str, list_indents: list[tuple[int, int]]) -> tuple[str, in
     return "", 0
 
 
+def _valid_fence_opener(line: str, match: re.Match[str] | None) -> bool:
+    """CommonMark disallows backticks in a backtick fence's info string."""
+    return (match is not None
+            and (match.group(1)[0] != "`" or "`" not in line[match.end():]))
+
+
 def mask_gfm_tables(text: str, chars: list[str]) -> None:
     """Mask complete GFM tables, not just separator rows and pipe syntax."""
     lines = text.splitlines(keepends=True)
@@ -675,7 +681,7 @@ def mask_reference_definitions(text: str, chars: list[str]) -> set[str]:
             index += 1
             continue
 
-        marker = re.match(r"^ {0,3}\[([^\]\n]+)\]:[ \t]*(.*)$", line)
+        marker = re.match(r"^ {0,3}\[((?:\\.|[^\]\\\n])+)\]:[ \t]*(.*)$", line)
         if not marker or marker.group(1).startswith("^"):
             paragraph_depth = None if structural else depth
             index += 1
@@ -1041,7 +1047,7 @@ def mask_fenced_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None
             hide(chars, offset, offset + len(line))
             if closing not in math_text[2:]:
                 in_math = (closing, quote_depth)
-        elif not in_comment and fence:
+        elif not in_comment and _valid_fence_opener(fence_text, fence):
             token = fence.group(1)
             in_fence = (token[0], len(token), quote_depth)
             hide(chars, offset, offset + len(line))
@@ -1528,7 +1534,7 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
         elif list_code_line:
             # Fences and math markers inside indented code are code, too.
             hide(chars, offset, offset + len(line))
-        elif fence:
+        elif _valid_fence_opener(fence_text, fence):
             marker = fence.group(1)
             in_fence = (marker[0], len(marker), quote_depth)
             hide(chars, offset, offset + len(line))
@@ -3093,6 +3099,32 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert len(russian_new(
         SimpleNamespace(run_review=russian_excerpt_mock), "before", "after"
     )) == 1
+
+    # Backtick fences with a backtick in the info string are NOT code
+    # fences under CommonMark §4.5. Do not consume the following prose.
+    invalid_info_fence = (
+        "``` `недопустимая метка`\n"
+        "Видимый абзац после ошибочного fence.\n"
+    )
+    assert "Видимый абзац после ошибочного fence." in prose_only(invalid_info_fence)
+    for valid_fence in (
+        "```python\nСКРЫТЫЙ КОД\n```\n",
+        "~~~ `допустимая метка`\nСКРЫТЫЙ КОД\n~~~\n",
+    ):
+        extracted = prose_only(valid_fence + "Видимый абзац после кода.\n")
+        assert "СКРЫТЫЙ КОД" not in extracted, extracted
+        assert "Видимый абзац после кода." in extracted, extracted
+
+    # Link-reference labels can contain an escaped closing bracket.
+    # Neither a resolved reference's ID nor its definition is prose.
+    escaped_reference = (
+        r'[ref\\]]: /internal "СЛУЖЕБНЫЙ ЗАГОЛОВОК"' + "\n\n"
+        + r'[Видимый текст][ref\\]]' + "\n"
+    )
+    escaped_prose = prose_only(escaped_reference, is_mdx=False)
+    assert "Видимый текст" in escaped_prose, escaped_prose
+    for hidden in ("/internal", "СЛУЖЕБНЫЙ ЗАГОЛОВОК", "ref"):
+        assert hidden not in escaped_prose, (hidden, escaped_prose)
 
     huge_report = MARKER + "\n" + ("ТЕКСТ ОТЧЁТА\n" * 10000)
     shortened = limit_report_size(huge_report, 1024)
