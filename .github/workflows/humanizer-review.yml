@@ -5,9 +5,12 @@ on:
     # Always refresh reports, even when the latest diff has no ru/sr articles.
     types: [opened, synchronize, reopened, ready_for_review, edited]
 
-# Serialize publication per PR: a newer synchronize supersedes the old run.
+# Metadata-only edits do not cancel real reviews. Base-branch edits still do.
 concurrency:
-  group: humanizer-review-${{ github.event.pull_request.number }}
+  group: >-
+    ${{ github.event.action == 'edited' && !github.event.changes.base &&
+        format('humanizer-review-metadata-{0}-{1}', github.event.pull_request.number, github.run_id) ||
+        format('humanizer-review-{0}', github.event.pull_request.number) }}
   cancel-in-progress: true
 
 permissions:
@@ -20,6 +23,8 @@ env:
 
 jobs:
   humanizer:
+    # A PR base retarget must update the report; title/body edits must not.
+    if: github.event.action != 'edited' || github.event.changes.base != null
     runs-on: ubuntu-latest
     steps:
       - name: Trusted adapter from base
@@ -47,13 +52,36 @@ jobs:
             echo "First integration PR is tested by the separate read-only contract workflow." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Fetch merge-base article snapshot
+        id: snapshot
         if: steps.trusted.outputs.ready == 'true'
         env:
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           # Adapter stays on trusted base; comparison uses the PR merge base.
-          git -C base fetch --no-tags origin \
-            "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/humanizer-pr-head"
+          # A failed snapshot must invalidate the previous comment, not leave
+          # a stale report looking like the latest review.
+          report_unavailable() {
+            printf '%s\n' \
+              '<!-- svesnost-humanizer-review -->' \
+              '## Языковая редактура / Језичка редактура' \
+              '' \
+              'Проверка недоступна: не удалось получить базовую версию статей.' \
+              'Провера није доступна: није могуће преузети основну верзију чланака.' \
+              'Предыдущий отчёт не подтверждает текущий PR. Повторите проверку.' \
+              > /tmp/humanizer-comment.md
+          }
+          trap report_unavailable ERR
+          fetched=false
+          for attempt in 1 2 3; do
+            if git -C base fetch --no-tags origin \
+                "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/humanizer-pr-head"; then
+              fetched=true
+              break
+            fi
+            echo "::warning::Cannot fetch PR head (attempt ${attempt}/3)"
+            sleep "$((attempt * 2))"
+          done
+          test "$fetched" = true
           MERGE_BASE="$(git -C base merge-base HEAD refs/remotes/origin/humanizer-pr-head)"
           test -n "$MERGE_BASE"
           git -C base worktree add --detach "$GITHUB_WORKSPACE/base-content" "$MERGE_BASE"
@@ -97,6 +125,7 @@ jobs:
           git -C /tmp/humanizer_serbian checkout --detach FETCH_HEAD
           test "$(git -C /tmp/humanizer_serbian rev-parse HEAD)" = "$HUMANIZER_SERBIAN_SHA"
       - name: Generate prose-only editorial review
+        id: generate
         if: steps.trusted.outputs.ready == 'true'
         run: |
           python3 base/.github/scripts/humanizer_review.py \
@@ -107,11 +136,16 @@ jobs:
             --serbian-root /tmp/humanizer_serbian \
             --output /tmp/humanizer-comment.md
       - name: Add review to Actions summary
-        if: steps.trusted.outputs.ready == 'true'
+        if: >-
+          always() &&
+          steps.trusted.outputs.ready == 'true' &&
+          (steps.snapshot.outcome == 'failure' || steps.generate.outcome == 'success')
         run: cat /tmp/humanizer-comment.md >> "$GITHUB_STEP_SUMMARY"
       - name: Update PR review comment
-        if: >
+        if: >-
+          always() &&
           steps.trusted.outputs.ready == 'true' &&
+          (steps.snapshot.outcome == 'failure' || steps.generate.outcome == 'success') &&
           github.event.pull_request.head.repo.full_name == github.repository &&
           github.actor != 'dependabot[bot]'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
