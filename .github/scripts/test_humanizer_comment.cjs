@@ -47,10 +47,23 @@ const workflow = fs.readFileSync(
   path.join(__dirname, "../workflows/humanizer-review.yml"),
   "utf8"
 );
-assert.ok(workflow.includes("group: humanizer-review-" + "$" + "{{ github.event.pull_request.number }}"));
+// Metadata-only edits get an independent concurrency group and skip the job.
+// Edits to the PR base must still run the review and supersede older results.
+assert.ok(workflow.includes("format('humanizer-review-{0}', github.event.pull_request.number)"));
+assert.ok(workflow.includes("humanizer-review-metadata-{0}-{1}"));
+assert.ok(workflow.includes("github.event.action == 'edited' && !github.event.changes.base"));
+assert.ok(workflow.includes("github.event.action != 'edited' || github.event.changes.base != null"));
 assert.ok(workflow.includes("cancel-in-progress: true"));
 assert.ok(workflow.includes("isCurrentReviewHead("));
 assert.ok(workflow.includes("file.previous_filename"));
 assert.ok(workflow.includes("JSON.stringify({"));
+// Transient snapshot-fetch failures are retried; terminal failures publish
+// an unavailable report instead of silently retaining a stale PR comment.
+assert.ok(workflow.includes("id: snapshot"));
+assert.ok(workflow.includes("for attempt in 1 2 3"));
+assert.ok(workflow.includes("trap report_unavailable ERR"));
+assert.ok(workflow.includes("steps.snapshot.outcome == 'failure'"));
+assert.ok(workflow.includes("steps.generate.outcome == 'success'"));
+assert.ok(workflow.includes("always() &&"));
 
 console.log("Humanizer bot ownership and sequential synchronize safety: OK");
