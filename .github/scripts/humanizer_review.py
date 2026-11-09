@@ -523,6 +523,23 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
         if text[index] == ")":
             following_close = index
         next_close[index] = following_close
+    # An unclosed <destination> must not cause repeated scans of every
+    # following candidate. Build an O(n) suffix index that only accepts a
+    # closing unescaped '>' before any illegal '<' or line break.
+    angle_destination_end = [-1] * (len(text) + 1)
+    next_angle_end = -1
+    next_nonspace = [len(text)] * (len(text) + 1)
+    next_visible = len(text)
+    for index in range(len(text) - 1, -1, -1):
+        char = text[index]
+        if char == ">" and not is_markdown_escaped(text, index):
+            next_angle_end = index
+        elif char in "<\r\n" and (char != "<" or not is_markdown_escaped(text, index)):
+            next_angle_end = -1
+        angle_destination_end[index] = next_angle_end
+        if not char.isspace():
+            next_visible = index
+        next_nonspace[index] = next_visible
     pos = 0
     while pos < len(text):
         image = text.startswith("![", pos) and not is_markdown_escaped(text, pos)
@@ -545,11 +562,24 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
         if opener not in raw_paired_openers:
             # Angle destinations and quoted titles may have unmatched
             # literal parentheses; those still need a complete parse.
-            prefix = text[cursor:cursor + 64].lstrip(" \t")
+            first = next_nonspace[cursor]
             hint = bisect_left(title_starts, cursor)
             possible_title = (hint < len(title_starts)
                               and title_starts[hint] < next_close[cursor])
-            if not prefix.startswith("<") and not possible_title:
+            if first < len(text) and text[first] == "<":
+                angle_end = angle_destination_end[first + 1]
+                if angle_end < 0:
+                    pos += 1
+                    continue
+                # After an angle destination only ')' or whitespace followed
+                # by ')' / a quoted title is grammatical. Reject a malformed
+                # shared suffix before entering the potentially long scan.
+                trailer = next_nonspace[angle_end + 1]
+                if (trailer == len(text) or text[trailer] not in ")(\'\""
+                        or (trailer == angle_end + 1 and text[trailer] != ")")):
+                    pos += 1
+                    continue
+            elif not possible_title:
                 pos += 1
                 continue
         scan_end = len(text)
@@ -1104,37 +1134,55 @@ def mdx_container_prose_lines(text: str) -> set[int]:
 
 
 def ordinary_paragraph_continuations(text: str) -> set[int]:
-    """Offsets of indented lines continuing a paragraph without a blank line.
+    """Mark indented paragraph continuations in Markdown and blockquotes.
 
-    CommonMark treats four leading spaces as ordinary continuation text when
-    a paragraph is already open. A blank line resets this context, allowing
-    subsequent four-space lines to start an indented code block.
+    Four leading spaces are visible text when a paragraph is already open;
+    after a blank they start code instead. In quoted lists, continuation
+    indentation is relative to the list marker rather than the '>' prefix.
     """
     offsets: set[int] = set()
     paragraph_open = False
+    active_depth = 0
+    quoted_list_indent: int | None = None
     offset = 0
     for line in text.splitlines(keepends=True):
-        stripped = line.strip()
-        indent = len(line) - len(line.lstrip(" "))
-        _, quote_depth = _unquote_line(line)
-        if not stripped or quote_depth:
+        visible, quote_depth = _unquote_line(line)
+        stripped = visible.strip()
+        indent = len(visible) - len(visible.lstrip(" "))
+        if quote_depth != active_depth:
             paragraph_open = False
-        elif indent >= 4:
-            if paragraph_open:
-                offsets.add(offset)
-            else:
-                paragraph_open = False
+            quoted_list_indent = None
+        if not stripped:
+            paragraph_open = False
         else:
-            paragraph_open = not bool(re.match(
-                r"^ {0,3}(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|"
-                r"[" + chr(96) + r"~]{3,}|"
-                r"<(?:/?[A-Za-z]|!--)|\[\^[^\]]+\]:|"
-                r"(?:import|export)\s+|(?:---|\*\*\*|___)\s*$)",
-                line
-            ))
+            list_marker = re.match(r"^ *(?:[-*+]|\d+[.)])[ \t]+", visible)
+            if list_marker and quote_depth:
+                quoted_list_indent = len(list_marker.group(0))
+                paragraph_open = True
+            elif indent >= 4:
+                # Code cannot interrupt an existing paragraph. A quoted list
+                # may also resume after a blank at its content indentation;
+                # indented code needs four additional spaces.
+                if (paragraph_open or (quote_depth and quoted_list_indent is not None
+                        and quoted_list_indent <= indent < quoted_list_indent + 4)):
+                    offsets.add(offset)
+                    paragraph_open = True
+                else:
+                    paragraph_open = False
+            else:
+                if (quoted_list_indent is not None and indent < quoted_list_indent
+                        and not list_marker):
+                    quoted_list_indent = None
+                paragraph_open = not bool(re.match(
+                    r"^ {0,3}(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|"
+                    r"[" + chr(96) + r"~]{3,}|"
+                    r"<(?:/?[A-Za-z]|!--)|\[\^[^\]]+\]:|"
+                    r"(?:import|export)\s+|(?:---|\*\*\*|___)\s*$)",
+                    visible
+                ))
+        active_depth = quote_depth
         offset += len(line)
     return offsets
-
 
 def mask_indented_code_before_blocks(text: str, chars: list[str],
                                      paragraph_lines: set[int],
@@ -1184,7 +1232,8 @@ def mask_indented_code_before_blocks(text: str, chars: list[str],
                 list_indents.append((indent, len(marker.group(0))))
             after_blank = False
         elif quote_depth and quote_indent >= 4:
-            hide(chars, offset, offset + len(line))
+            if offset not in paragraph_lines and offset not in mdx_prose_lines:
+                hide(chars, offset, offset + len(line))
             after_blank = False
         elif indent >= 4:
             if not list_indents:
@@ -1505,7 +1554,8 @@ def prose_only(raw: str, *, is_mdx: bool = True) -> str:
                     list_indents.append((indent, len(list_marker.group(0))))
                 after_blank = False
             elif quote_depth and quote_indent >= 4:
-                hide(chars, offset, offset + len(line))
+                if offset not in paragraph_lines and offset not in mdx_prose_lines:
+                    hide(chars, offset, offset + len(line))
                 after_blank = False
             elif indent >= 4:
                 if not list_indents:
@@ -1995,6 +2045,18 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "Документ" in prose_only(with_later_link)
     assert "/page" not in prose_only(with_later_link)
 
+    # Many unclosed angle destinations must be rejected without rescanning
+    # their common suffix; a valid later link still has to be found.
+    malformed_angles = "[текст](<" * 4000 + ")"
+    assert markdown_inline_links(malformed_angles) == []
+    angle_with_link = malformed_angles + " См. [Документ](<private/path>) далее."
+    assert len(markdown_inline_links(angle_with_link)) == 1
+    angle_after = prose_only(angle_with_link)
+    assert "Документ" in angle_after and "далее" in angle_after, angle_after
+    assert "private/path" not in angle_after, angle_after
+    # An escaped '<' inside an angle destination does not invalidate it.
+    assert len(markdown_inline_links(r"[Документ](<a\<b>)")) == 1
+
     # CommonMark URI autolinks use any valid scheme, not just http(s).
     uri_autolinks = (
         "Контакт <mailto:editor@example.org> для связи.\n"
@@ -2460,6 +2522,27 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
         extracted = prose_only(quoted_code)
         assert "КОД В" not in extracted, extracted
         assert "Видимый текст." in extracted, extracted
+
+    # Four spaces inside a quote can continue an existing paragraph; the
+    # same indentation starts code after a blank line.
+    quote_continuation = (
+        "> Первый абзац\n"
+        ">     Продолжение того же абзаца\n"
+        ">\n"
+        ">     СЕКРЕТНЫЙ КОД ПОСЛЕ ПУСТОЙ\n"
+        ">\n"
+        "> Следующий видимый текст.\n"
+    )
+    quoted_body = prose_only(quote_continuation)
+    for visible in ("Первый абзац", "Продолжение того же абзаца",
+                    "Следующий видимый текст."):
+        assert visible in quoted_body, (visible, quoted_body)
+    assert "СЕКРЕТНЫЙ КОД ПОСЛЕ ПУСТОЙ" not in quoted_body, quoted_body
+    # List item content indentation is measured after the quote marker.
+    quoted_list = "> 100. Пункт списка\n>      Продолжение длинного пункта\n"
+    quoted_list_body = prose_only(quoted_list)
+    assert "Пункт списка" in quoted_list_body, quoted_list_body
+    assert "Продолжение длинного пункта" in quoted_list_body, quoted_list_body
 
     # Reference-style Markdown links: keep reader-visible label only.
     reference = (
