@@ -28,6 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trusted adapter from base
+        id: checkout_base
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: ${{ github.event.pull_request.base.sha }}
@@ -35,6 +36,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Proposed content from PR
+        id: checkout_head
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ github.event.pull_request.head.repo.full_name }}
@@ -139,8 +141,17 @@ jobs:
             --output /tmp/humanizer-comment.md
       - name: Finalize report, including failures in any review stage
         id: finalize
-        if: always() && steps.trusted.outputs.ready == 'true'
+        # No adapter exists on the first integration PR. But if either
+        # checkout fails, invalidate the previous report without executing
+        # anything from the proposed head branch.
+        if: >-
+          always() &&
+          (steps.trusted.outputs.ready == 'true' ||
+           steps.checkout_base.outcome != 'success' ||
+           steps.checkout_head.outcome != 'success')
         env:
+          BASE_CHECKOUT_OUTCOME: ${{ steps.checkout_base.outcome }}
+          HEAD_CHECKOUT_OUTCOME: ${{ steps.checkout_head.outcome }}
           SNAPSHOT_OUTCOME: ${{ steps.snapshot.outcome }}
           SELECTION_OUTCOME: ${{ steps.selection.outcome }}
           EDITORS_OUTCOME: ${{ steps.editors.outcome }}
@@ -149,7 +160,9 @@ jobs:
         run: |
           # An outdated report must not appear to cover the current HEAD.
           # The successful run leaves the generated report untouched.
-          if [ "$SNAPSHOT_OUTCOME" != success ] ||
+          if [ "$BASE_CHECKOUT_OUTCOME" != success ] ||
+             [ "$HEAD_CHECKOUT_OUTCOME" != success ] ||
+             [ "$SNAPSHOT_OUTCOME" != success ] ||
              [ "$SELECTION_OUTCOME" != success ] ||
              [ "$EDITORS_OUTCOME" != success ] ||
              [ "$GENERATE_OUTCOME" != success ] ||
@@ -180,12 +193,24 @@ jobs:
             const fs = require('fs');
             const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
             const marker = '<!-- svesnost-humanizer-review -->';
-            const { findOwnedReviewComment, isCurrentReviewHead } = require(
-              require('path').join(
-                process.env.GITHUB_WORKSPACE,
-                'base/.github/scripts/humanizer_comment.cjs'
-              )
+            const helperPath = require('path').join(
+              process.env.GITHUB_WORKSPACE,
+              'base/.github/scripts/humanizer_comment.cjs'
             );
+            let findOwnedReviewComment, isCurrentReviewHead;
+            if (fs.existsSync(helperPath)) {
+              ({ findOwnedReviewComment, isCurrentReviewHead } = require(helperPath));
+            } else {
+              // The trusted base checkout itself may have failed. Use only
+              // minimal trusted inline recovery code, never head-branch JS.
+              findOwnedReviewComment = (comments, target) => comments.find(
+                item => item?.user?.login === 'github-actions[bot]' &&
+                  typeof item.body === 'string' && item.body.includes(target)
+              );
+              isCurrentReviewHead = (expected, actual) =>
+                typeof expected === 'string' && expected.length > 0 &&
+                expected === actual;
+            }
             // Concurrency cancels older runs; this also guards the final
             // publishing step if a stale job survives cancellation.
             const current = await github.rest.pulls.get({
