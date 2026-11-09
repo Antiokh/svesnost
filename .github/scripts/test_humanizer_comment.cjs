@@ -76,7 +76,7 @@ for (const fragment of [
   '[ "$SELECTION_OUTCOME" != success ]',
   '[ "$EDITORS_OUTCOME" != success ]',
   '[ "$GENERATE_OUTCOME" != success ]',
-  '[ ! -s /tmp/humanizer-comment.md ]',
+  '[ ! -s "$REPORT_PATH" ]',
   "steps.finalize.outcome == 'success'",
   "Проверка недоступна: один из этапов проверки завершился ошибкой.",
 ]) {
@@ -84,4 +84,53 @@ for (const fragment of [
 }
 assert.ok(workflow.includes("always() &&"));
 
-console.log("Humanizer bot ownership and sequential synchronize safety: OK");
+// Execute the exact finalizer shell body with an isolated report path.
+// This checks both normal preservation and invalidation for each failed stage.
+const os = require("node:os");
+const { spawnSync } = require("node:child_process");
+const lines = workflow.split("\n");
+const finalize = lines.findIndex((line) =>
+  line.includes("- name: Finalize report, including failures in any review stage")
+);
+assert.ok(finalize >= 0);
+const runStart = lines.findIndex((line, i) => i > finalize && line === "        run: |");
+const runEnd = lines.findIndex((line, i) => i > runStart && line.startsWith("      - name: "));
+assert.ok(runStart > finalize && runEnd > runStart);
+const finalizer = lines.slice(runStart + 1, runEnd)
+  .map((line) => line.startsWith("          ") ? line.slice(10) : line)
+  .join("\n");
+const dir = fs.mkdtempSync(path.join(os.tmpdir(), "humanizer-finalize-"));
+const reportPath = path.join(dir, "report.md");
+const initialReport = marker + "\nPrevious successful review\n";
+const successfulStages = {
+  SNAPSHOT_OUTCOME: "success",
+  SELECTION_OUTCOME: "success",
+  EDITORS_OUTCOME: "success",
+  GENERATE_OUTCOME: "success",
+};
+function runFinalizer(outcomes) {
+  const output = spawnSync("bash", ["-e", "-c", finalizer], {
+    env: { ...process.env, ...successfulStages, ...outcomes, REPORT_PATH: reportPath },
+    encoding: "utf8",
+  });
+  assert.equal(output.status, 0, output.stderr);
+  return fs.readFileSync(reportPath, "utf8");
+}
+try {
+  fs.writeFileSync(reportPath, initialReport);
+  assert.equal(runFinalizer({}), initialReport, "A successful report must stay unchanged");
+  for (const stage of Object.keys(successfulStages)) {
+    fs.writeFileSync(reportPath, initialReport);
+    const unavailable = runFinalizer({ [stage]: "failure" });
+    assert.ok(unavailable.startsWith(marker));
+    assert.ok(unavailable.includes("Проверка недоступна"), stage);
+    assert.ok(!unavailable.includes("Previous successful review"), stage);
+  }
+  // A missing output file with otherwise successful stages is also invalid.
+  fs.unlinkSync(reportPath);
+  assert.ok(runFinalizer({}).includes("Проверка недоступна"));
+} finally {
+  fs.rmSync(dir, { recursive: true, force: true });
+}
+
+console.log("Humanizer ownership, synchronization and failed-stage reports: OK");
