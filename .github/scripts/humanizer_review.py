@@ -765,9 +765,14 @@ def mask_reference_definitions(text: str, chars: list[str]) -> set[str]:
         # Separate one destination token from the optional title. A quoted
         # destination <...> may contain spaces; a bare destination may not.
         if value.startswith("<"):
-            match = re.match(r"^<[^<>\r\n]+>", value)
+            # CommonMark also allows an explicitly empty destination: <>.
+            match = re.match(r"^<[^<>\r\n]*>", value)
         else:
             match = re.match(r"^[^\s<>]+", value)
+            # Apply the same balancing and backslash rules used by inline
+            # links. An invalid definition must remain reader-visible prose.
+            if match and not valid_inline_link_payload(match.group(0)):
+                match = None
         if not match:
             paragraph_depth = depth
             index += 1
@@ -2740,6 +2745,30 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     assert "Текст со" in compact_body and "ссылкой" in compact_body, compact_body
     assert "/private/internal-path" not in compact_body, compact_body
     assert "[ref]:" not in compact_body, compact_body
+
+    # A malformed bare destination is not a reference definition: the full
+    # line remains visible text, including an unmatched parenthesis.
+    for broken in ("/broken(foo", "/broken)foo"):
+        invalid_reference = f"[ref]: {broken}\n\nСледующий абзац.\n"
+        invalid_body = prose_only(invalid_reference)
+        assert f"[ref]: {broken}" in invalid_body, invalid_body
+        assert "Следующий абзац." in invalid_body, invalid_body
+
+    # Balanced nested parentheses and escaped parentheses are valid
+    # destination syntax and must still be excluded.
+    for valid in ("/valid(foo)", "/valid(and(nested))", r"/escaped\(foo"):
+        valid_reference = f"[ref]: {valid}\n\nСм. [материал][ref].\n"
+        valid_body = prose_only(valid_reference)
+        assert "См." in valid_body and "материал" in valid_body, valid_body
+        assert valid not in valid_body and "[ref]:" not in valid_body, valid_body
+        assert "[ref]" not in valid_body, valid_body
+
+    # An empty angle-bracket destination is valid CommonMark (example 200).
+    empty_reference = "[ref]: <>\n\nСм. [материал][ref].\n"
+    empty_body = prose_only(empty_reference)
+    assert "См." in empty_body and "материал" in empty_body, empty_body
+    for hidden in ("[ref]:", "<>", "[ref]"):
+        assert hidden not in empty_body, (hidden, empty_body)
 
     # A reference definition cannot interrupt a paragraph (CommonMark
     # example 213); the entire second line remains reader-visible.
