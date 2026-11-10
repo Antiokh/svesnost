@@ -550,7 +550,15 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
             next_visible = index
         next_nonspace[index] = next_visible
     pos = 0
+    # A link destination is opaque Markdown metadata. Walk only its label
+    # for nested images (e.g. [![alt](src)](href)), then jump past the URL.
+    # Each frame holds (label_end, resume_after_link).
+    label_ranges: list[tuple[int, int]] = []
     while pos < len(text):
+        if label_ranges and pos >= label_ranges[-1][0]:
+            pos = label_ranges.pop()[1]
+            continue
+        scan_limit = label_ranges[-1][0] if label_ranges else len(text)
         image = text.startswith("![", pos) and not is_markdown_escaped(text, pos)
         bracket = pos + 1 if image else pos
         if (bracket >= len(text) or text[bracket] != "["
@@ -559,13 +567,13 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
             continue
         label_start = bracket + 1
         label_end = pairs.get(bracket)
-        if (label_end is None or label_end + 1 >= len(text)
+        if (label_end is None or label_end + 1 >= scan_limit
                 or text[label_end + 1] != "("):
             pos += 1
             continue
         cursor = label_end + 2
         opener = label_end + 1
-        if next_close[cursor] < 0:
+        if next_close[cursor] < 0 or next_close[cursor] >= scan_limit:
             pos += 1
             continue
         if opener not in raw_paired_openers:
@@ -604,7 +612,7 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
                         or text[next_nonspace[title_end + 1]] != ")"):
                     pos += 1
                     continue
-        scan_end = len(text)
+        scan_end = scan_limit
         parens = 1
         title_quote = None
         angle_destination = False
@@ -645,8 +653,10 @@ def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
                         pos += 1
                         break
                     spans.append((pos, cursor + 1, label_start, label_end, image))
-                    # Inspect the label as well: [![alt](src)](href) contains
-                    # an image whose alt must be excluded independently.
+                    # Only the label can contain another rendered image;
+                    # rescanning the destination creates false links and O(n²)
+                    # work on long balanced URLs with bracket-like text.
+                    label_ranges.append((label_end, cursor + 1))
                     pos = label_start
                     break
             cursor += 1
@@ -3290,6 +3300,20 @@ const priv = "КОД НЕ ПРОВЕРЯТЬ";
     # using the suffix indexes, not by scanning the shared remainder N times.
     malformed_titles = '[a](path "title' * 5000 + ')'
     assert markdown_inline_links(malformed_titles) == []
+
+    # A balanced URL can contain text that resembles other inline links.
+    # Each nested '[a](' previously triggered a scan of the shared suffix,
+    # causing quadratic work and spurious link results. The URL is opaque.
+    nested_destination = '[a](' * 5000 + ')' * 5000
+    assert markdown_inline_links(nested_destination) == [
+        (0, len(nested_destination), 1, 2, False)
+    ]
+    assert prose_only(nested_destination).strip() == 'a'
+    # Nested images in actual link labels must still be fully masked.
+    linked_image = '[![СКРЫТЫЙ ALT](/image.png)](/page) текст после.'
+    linked_image_prose = prose_only(linked_image)
+    assert 'СКРЫТЫЙ ALT' not in linked_image_prose, linked_image_prose
+    assert 'текст после.' in linked_image_prose, linked_image_prose
 
     # Repeated schemes in a single token must not cause quadratic scanning.
     many_schemes = list("https://a" * 10000)
