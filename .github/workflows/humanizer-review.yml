@@ -51,7 +51,7 @@ jobs:
             echo "ready=true" >> "$GITHUB_OUTPUT"
           else
             echo "ready=false" >> "$GITHUB_OUTPUT"
-            echo "First integration PR is tested by the separate read-only contract workflow." >> "$GITHUB_STEP_SUMMARY"
+            echo "The PR base has no trusted Humanizer adapter; the separate read-only contract workflow tests first integrations." >> "$GITHUB_STEP_SUMMARY"
           fi
       - name: Fetch merge-base article snapshot
         id: snapshot
@@ -141,15 +141,17 @@ jobs:
             --output /tmp/humanizer-comment.md
       - name: Finalize report, including failures in any review stage
         id: finalize
-        # No adapter exists on the first integration PR. But if either
-        # checkout fails, invalidate the previous report without executing
-        # anything from the proposed head branch.
+        # A missing trusted adapter invalidates an old report after base
+        # retargeting, but must not create a comment on first integration.
+        # Checkout failures also invalidate previous results.
         if: >-
           always() &&
           (steps.trusted.outputs.ready == 'true' ||
+           steps.trusted.outputs.ready == 'false' ||
            steps.checkout_base.outcome != 'success' ||
            steps.checkout_head.outcome != 'success')
         env:
+          ADAPTER_READY: ${{ steps.trusted.outputs.ready }}
           BASE_CHECKOUT_OUTCOME: ${{ steps.checkout_base.outcome }}
           HEAD_CHECKOUT_OUTCOME: ${{ steps.checkout_head.outcome }}
           SNAPSHOT_OUTCOME: ${{ steps.snapshot.outcome }}
@@ -158,9 +160,19 @@ jobs:
           GENERATE_OUTCOME: ${{ steps.generate.outcome }}
           REPORT_PATH: /tmp/humanizer-comment.md
         run: |
-          # An outdated report must not appear to cover the current HEAD.
-          # The successful run leaves the generated report untouched.
-          if [ "$BASE_CHECKOUT_OUTCOME" != success ] ||
+          # A base without the trusted adapter invalidates an earlier report.
+          # First-integration PRs have no existing comment to update.
+          if [ "$ADAPTER_READY" = false ]; then
+            printf '%s\n' \
+              '<!-- svesnost-humanizer-review -->' \
+              '## Языковая редактура / Језичка редактура' \
+              '' \
+              'Проверка недоступна: в текущей базовой ветке нет доверенного адаптера Humanizer.' \
+              'Провера није доступна: у тренутној основној грани нема поузданог Humanizer адаптера.' \
+              'Предыдущий отчёт не подтверждает текущий PR.' \
+              > "$REPORT_PATH"
+          # The successful run leaves its generated report untouched.
+          elif [ "$BASE_CHECKOUT_OUTCOME" != success ] ||
              [ "$HEAD_CHECKOUT_OUTCOME" != success ] ||
              [ "$SNAPSHOT_OUTCOME" != success ] ||
              [ "$SELECTION_OUTCOME" != success ] ||
@@ -188,6 +200,7 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           REPORT_PATH: /tmp/humanizer-comment.md
+          TRUSTED_READY: ${{ steps.trusted.outputs.ready }}
         with:
           script: |
             const fs = require('fs');
@@ -197,9 +210,9 @@ jobs:
               process.env.GITHUB_WORKSPACE,
               'base/.github/scripts/humanizer_comment.cjs'
             );
-            let findOwnedReviewComment, isCurrentReviewHead;
+            let findOwnedReviewComment, isCurrentReviewTarget;
             if (fs.existsSync(helperPath)) {
-              ({ findOwnedReviewComment, isCurrentReviewHead } = require(helperPath));
+              ({ findOwnedReviewComment, isCurrentReviewTarget } = require(helperPath));
             } else {
               // The trusted base checkout itself may have failed. Use only
               // minimal trusted inline recovery code, never head-branch JS.
@@ -207,9 +220,16 @@ jobs:
                 item => item?.user?.login === 'github-actions[bot]' &&
                   typeof item.body === 'string' && item.body.includes(target)
               );
-              isCurrentReviewHead = (expected, actual) =>
-                typeof expected === 'string' && expected.length > 0 &&
-                expected === actual;
+              isCurrentReviewTarget = (expected, actual) =>
+                typeof expected?.head?.sha === 'string' &&
+                expected.head.sha.length > 0 &&
+                expected.head.sha === actual?.head?.sha &&
+                typeof expected?.base?.ref === 'string' &&
+                expected.base.ref.length > 0 &&
+                expected.base.ref === actual?.base?.ref &&
+                typeof expected?.base?.sha === 'string' &&
+                expected.base.sha.length > 0 &&
+                expected.base.sha === actual?.base?.sha;
             }
             // Concurrency cancels older runs; this also guards the final
             // publishing step if a stale job survives cancellation.
@@ -218,11 +238,8 @@ jobs:
               repo: context.repo.repo,
               pull_number: context.issue.number,
             });
-            if (!isCurrentReviewHead(
-              context.payload.pull_request.head.sha,
-              current.data.head.sha
-            )) {
-              core.info('Skip obsolete Humanizer review: PR head has changed.');
+            if (!isCurrentReviewTarget(context.payload.pull_request, current.data)) {
+              core.info('Skip obsolete Humanizer review: PR head or base has changed.');
               return;
             }
             const comments = await github.paginate(github.rest.issues.listComments, {
@@ -232,18 +249,21 @@ jobs:
               per_page: 100,
             });
             const existing = findOwnedReviewComment(comments, marker);
-            // Re-read the head after pagination, immediately before writing.
-            // Comments have no atomic compare-and-swap against a PR HEAD.
+            // On the initial integration there is no trusted adapter yet.
+            // After retargeting, however, invalidate an existing bot report.
+            if (process.env.TRUSTED_READY === 'false' && !existing) {
+              core.info('No trusted adapter and no previous bot report: skip first integration comment.');
+              return;
+            }
+            // Re-read the head and base after pagination, just before writing.
+            // Comments have no atomic compare-and-swap against PR refs.
             const beforeWrite = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: context.issue.number,
             });
-            if (!isCurrentReviewHead(
-              context.payload.pull_request.head.sha,
-              beforeWrite.data.head.sha
-            )) {
-              core.info('Skip stale review after comments pagination.');
+            if (!isCurrentReviewTarget(context.payload.pull_request, beforeWrite.data)) {
+              core.info('Skip stale review after comments pagination: PR head or base has changed.');
               return;
             }
             if (existing) {
