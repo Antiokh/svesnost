@@ -19,4 +19,17 @@ function isCurrentReviewHead(eventHead, currentHead) {
   );
 }
 
-module.exports = { findOwnedReviewComment, isCurrentReviewHead };
+/** The review belongs to both a particular PR head and a particular base. */
+function isCurrentReviewTarget(eventPr, currentPr) {
+  return (
+    isCurrentReviewHead(eventPr?.head?.sha, currentPr?.head?.sha) &&
+    typeof eventPr?.base?.ref === "string" &&
+    eventPr.base.ref.length > 0 &&
+    eventPr.base.ref === currentPr?.base?.ref &&
+    typeof eventPr?.base?.sha === "string" &&
+    eventPr.base.sha.length > 0 &&
+    eventPr.base.sha === currentPr?.base?.sha
+  );
+}
+
+module.exports = { findOwnedReviewComment, isCurrentReviewHead, isCurrentReviewTarget };
