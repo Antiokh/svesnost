@@ -141,7 +141,6 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), "humanizer-finalize-"));
 const reportPath = path.join(dir, "report.md");
 const initialReport = marker + "\nPrevious successful review\n";
 const successfulStages = {
-  ADAPTER_READY: "true",
   BASE_CHECKOUT_OUTCOME: "success",
   HEAD_CHECKOUT_OUTCOME: "success",
   SNAPSHOT_OUTCOME: "success",
@@ -151,7 +150,7 @@ const successfulStages = {
 };
 function runFinalizer(outcomes) {
   const output = spawnSync("bash", ["-e", "-c", finalizer], {
-    env: { ...process.env, ...successfulStages, ...outcomes, REPORT_PATH: reportPath },
+    env: { ...process.env, ...successfulStages, ADAPTER_READY: "true", ...outcomes, REPORT_PATH: reportPath },
     encoding: "utf8",
   });
   assert.equal(output.status, 0, output.stderr);
