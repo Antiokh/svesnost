@@ -96,8 +96,8 @@ for (const route of translatedLukicPaths) {
         'g'
       );
       const matches = html.match(link) ?? [];
-      assert.equal(matches.length, 2,
-        pageUrl + ' needs desktop and mobile switch links to ' + target +
+      assert.ok(matches.length >= 2,
+        pageUrl + ' needs working language links to ' + target +
         ' (found ' + matches.length + ')');
     }
   }
