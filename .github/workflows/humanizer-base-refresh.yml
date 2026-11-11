@@ -1,0 +1,47 @@
+name: Refresh Humanizer reports after main updates
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# This trusted dispatcher never checks out or executes pull request code.
+permissions:
+  contents: read
+  pull-requests: read
+  actions: write
+
+concurrency:
+  group: humanizer-base-refresh-main
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recheck open same-repository PRs targeting main
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const prs = await github.paginate(github.rest.pulls.list, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              base: 'main',
+              per_page: 100,
+            });
+            const repository = context.repo.owner + '/' + context.repo.repo;
+            for (const pr of prs) {
+              // Never run a privileged dispatch against fork or Dependabot PRs.
+              if (pr.state !== 'open' || pr.base?.ref !== 'main' ||
+                  pr.head?.repo?.full_name !== repository ||
+                  pr.user?.login === 'dependabot[bot]') continue;
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'humanizer-review.yml',
+                ref: 'main',
+                inputs: { pr_number: String(pr.number) },
+              });
+              core.info('Dispatched current-base Humanizer review for PR #' + pr.number);
+            }

@@ -4,13 +4,19 @@ on:
   pull_request:
     # Always refresh reports, even when the latest diff has no ru/sr articles.
     types: [opened, synchronize, reopened, ready_for_review, edited]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Open PR number to refresh after its base branch advances
+        required: true
+        type: number
 
 # Metadata-only edits do not cancel real reviews. Base-branch edits still do.
 concurrency:
   group: >-
-    ${{ github.event.action == 'edited' && !github.event.changes.base &&
+    ${{ github.event_name == 'pull_request' && github.event.action == 'edited' && !github.event.changes.base &&
         format('humanizer-review-metadata-{0}-{1}', github.event.pull_request.number, github.run_id) ||
-        format('humanizer-review-{0}', github.event.pull_request.number) }}
+        format('humanizer-review-{0}', github.event_name == 'workflow_dispatch' && inputs.pr_number || github.event.pull_request.number) }}
   cancel-in-progress: true
 
 permissions:
@@ -24,28 +30,70 @@ env:
 jobs:
   humanizer:
     # A PR base retarget must update the report; title/body edits must not.
-    if: github.event.action != 'edited' || github.event.changes.base != null
+    if: github.event_name != 'pull_request' || github.event.action != 'edited' || github.event.changes.base != null
     runs-on: ubuntu-latest
     steps:
+      - name: Resolve current PR snapshot
+        id: pr
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          REVIEW_PR_NUMBER: ${{ github.event_name == 'workflow_dispatch' && inputs.pr_number || github.event.pull_request.number }}
+        with:
+          script: |
+            const number = Number(process.env.REVIEW_PR_NUMBER);
+            if (!Number.isSafeInteger(number) || number < 1) {
+              throw new Error('Invalid pull request number');
+            }
+            // The input is only a PR number. Resolve all sensitive refs live.
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: number,
+            });
+            core.setOutput('active', 'false');
+            if (pr.state !== 'open') {
+              core.info('Skip closed pull request.');
+              return;
+            }
+            if (context.eventName === 'workflow_dispatch' &&
+                (pr.base?.ref !== 'main' ||
+                 pr.head?.repo?.full_name !== context.repo.owner + '/' + context.repo.repo ||
+                 pr.user?.login === 'dependabot[bot]')) {
+              core.info('Dispatch refresh only supports same-repository PRs targeting main.');
+              return;
+            }
+            core.setOutput('active', 'true');
+            core.setOutput('number', String(number));
+            core.setOutput('head_sha', pr.head.sha);
+            core.setOutput('head_repo', pr.head.repo.full_name);
+            core.setOutput('author', pr.user?.login || '');
+            core.setOutput('base_sha', pr.base.sha);
+            core.setOutput('target', JSON.stringify({
+              head: { sha: pr.head.sha },
+              base: { ref: pr.base.ref, sha: pr.base.sha },
+            }));
       - name: Trusted adapter from base
         id: checkout_base
+        if: steps.pr.outputs.active == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ steps.pr.outputs.base_sha }}
           path: base
           fetch-depth: 0
           persist-credentials: false
       - name: Proposed content from PR
         id: checkout_head
+        if: steps.pr.outputs.active == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
-          ref: ${{ github.event.pull_request.head.sha }}
+          repository: ${{ steps.pr.outputs.head_repo }}
+          ref: ${{ steps.pr.outputs.head_sha }}
           path: head
           fetch-depth: 1
           persist-credentials: false
       - name: Check trusted adapter availability
         id: trusted
+        if: steps.pr.outputs.active == 'true'
         run: |
           if test -f base/.github/scripts/humanizer_review.py; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
@@ -57,7 +105,7 @@ jobs:
         id: snapshot
         if: steps.trusted.outputs.ready == 'true'
         env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
         run: |
           # Adapter stays on trusted base; comparison uses the PR merge base.
           # A failed snapshot must invalidate the previous comment, not leave
@@ -91,13 +139,16 @@ jobs:
         id: selection
         if: steps.trusted.outputs.ready == 'true'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          REVIEW_PR_NUMBER: ${{ steps.pr.outputs.number }}
         with:
           script: |
             const fs = require('fs');
+            const prNumber = Number(process.env.REVIEW_PR_NUMBER);
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.issue.number,
+              pull_number: prNumber,
               per_page: 100,
             });
             const articles = files
@@ -145,7 +196,7 @@ jobs:
         # retargeting, but must not create a comment on first integration.
         # Checkout failures also invalidate previous results.
         if: >-
-          always() &&
+          always() && steps.pr.outputs.active == 'true' &&
           (steps.trusted.outputs.ready == 'true' ||
            steps.trusted.outputs.ready == 'false' ||
            steps.checkout_base.outcome != 'success' ||
@@ -195,15 +246,20 @@ jobs:
         if: >-
           always() &&
           steps.finalize.outcome == 'success' &&
-          github.event.pull_request.head.repo.full_name == github.repository &&
+          steps.pr.outputs.head_repo == github.repository &&
+          steps.pr.outputs.author != 'dependabot[bot]' &&
           github.actor != 'dependabot[bot]'
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         env:
           REPORT_PATH: /tmp/humanizer-comment.md
           TRUSTED_READY: ${{ steps.trusted.outputs.ready }}
+          REVIEW_PR_NUMBER: ${{ steps.pr.outputs.number }}
+          REVIEW_TARGET: ${{ steps.pr.outputs.target }}
         with:
           script: |
             const fs = require('fs');
+            const prNumber = Number(process.env.REVIEW_PR_NUMBER);
+            const expected = JSON.parse(process.env.REVIEW_TARGET);
             const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
             const marker = '<!-- svesnost-humanizer-review -->';
             const helperPath = require('path').join(
@@ -236,16 +292,16 @@ jobs:
             const current = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.issue.number,
+              pull_number: prNumber,
             });
-            if (!isCurrentReviewTarget(context.payload.pull_request, current.data)) {
+            if (current.data.state !== 'open' || !isCurrentReviewTarget(expected, current.data)) {
               core.info('Skip obsolete Humanizer review: PR head or base has changed.');
               return;
             }
             const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
+              issue_number: prNumber,
               per_page: 100,
             });
             const existing = findOwnedReviewComment(comments, marker);
@@ -260,9 +316,9 @@ jobs:
             const beforeWrite = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.issue.number,
+              pull_number: prNumber,
             });
-            if (!isCurrentReviewTarget(context.payload.pull_request, beforeWrite.data)) {
+            if (beforeWrite.data.state !== 'open' || !isCurrentReviewTarget(expected, beforeWrite.data)) {
               core.info('Skip stale review after comments pagination: PR head or base has changed.');
               return;
             }
@@ -277,7 +333,7 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.issue.number,
+                issue_number: prNumber,
                 body,
               });
             }
