@@ -62,3 +62,44 @@ for(const feature of geojson.features) {
   assert.ok(index.locales[feature.properties.locale]?.records.some((record) => record.url === feature.properties.eventUrl));
 }
 console.log('Entity map routes and generated projections: OK');
+
+
+// Every published Lukić record has three independently authored editions.
+// Test the actual HTML switcher links, not just their source filenames.
+const translatedLukicPaths = [
+  '/persons/',
+  '/persons/aleksandar-lukic/',
+  '/events/brics-intro-belgrade-2024/',
+  '/events/lukic-adviser-appointment-2025/',
+  '/evidence/lukic-appointment-2025/',
+  '/sources/ips-lukic-profile/',
+  '/sources/matica-lukic-biography-2019/',
+  '/sources/mit-lukic-appointment-2025/',
+  '/sources/brics-lukic-2024/',
+  '/sources/rts-lukic-2026/',
+];
+const languagePrefixes = { root: '', ru: '/ru', en: '/en' };
+for (const route of translatedLukicPaths) {
+  for (const [locale, prefix] of Object.entries(languagePrefixes)) {
+    const pageUrl = prefix + route;
+    const html = read(pageUrl);
+    const htmlLang = locale === 'root' ? 'sr' : locale;
+    assert.match(html, new RegExp('<html[^>]+lang="' + htmlLang + '"'), pageUrl + ' wrong language');
+    assert.ok(html.includes('data-pagefind-body'), pageUrl + ' should be searchable');
+
+    for (const [targetLocale, targetPrefix] of Object.entries(languagePrefixes)) {
+      const target = targetPrefix + route;
+      // These route values contain only /, hyphens and ASCII alphanumerics.
+      const link = new RegExp(
+        '<a\\b(?=[^>]*\\bhref="' + target + '")' +
+        '(?=[^>]*\\bdata-language-target="' + targetLocale + '")[^>]*>',
+        'g'
+      );
+      const matches = html.match(link) ?? [];
+      assert.ok(matches.length >= 2,
+        pageUrl + ' needs working language links to ' + target +
+        ' (found ' + matches.length + ')');
+    }
+  }
+}
+console.log('Lukić SR/RU/EN page equivalents and switch links: OK');
