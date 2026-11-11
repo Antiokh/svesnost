@@ -44,6 +44,7 @@ assert.equal(isCurrentReviewHead(undefined, newHead), false);
 // A review is tied to both refs. Retargeting or advancing the base without a
 // new head commit must never make the previous comparison look current.
 const expectedPr = {
+  state: "open",
   head: { sha: newHead },
   base: { ref: "main", sha: "c".repeat(40) },
 };
@@ -66,7 +67,7 @@ const workflow = fs.readFileSync(
 );
 // Metadata-only edits get an independent concurrency group and skip the job.
 // Edits to the PR base must still run the review and supersede older results.
-assert.ok(workflow.includes("format('humanizer-review-{0}', github.event.pull_request.number)"));
+assert.ok(workflow.includes("format('humanizer-review-{0}', github.event_name == 'workflow_dispatch' && inputs.pr_number || github.event.pull_request.number)"));
 assert.ok(workflow.includes("humanizer-review-metadata-{0}-{1}"));
 assert.ok(workflow.includes("github.event.action == 'edited' && !github.event.changes.base"));
 assert.ok(workflow.includes("github.event.action != 'edited' || github.event.changes.base != null"));
@@ -117,6 +118,12 @@ for (const fragment of [
   assert.ok(workflow.includes(fragment), "Missing failure-path guard: " + fragment);
 }
 assert.ok(workflow.includes("always() &&"));
+assert.ok(workflow.includes("workflow_dispatch:"));
+assert.ok(workflow.includes("steps.pr.outputs.base_sha"));
+assert.ok(workflow.includes("steps.pr.outputs.head_sha"));
+assert.ok(workflow.includes("steps.pr.outputs.active == 'true'"));
+assert.ok(workflow.includes("steps.pr.outputs.target"));
+assert.ok(workflow.includes("steps.pr.outputs.author != 'dependabot[bot]'"));
 
 // The base checkout can fail before the helper exists. The workflow must
 // contain a trusted, standalone fallback rather than relying on base files.
@@ -238,6 +245,8 @@ const runPublisher = new AsyncFunction("github", "context", "core", "require", "
           REPORT_PATH: report,
           GITHUB_WORKSPACE: helper ? workspace : untrustedWorkspace,
           TRUSTED_READY: ready,
+          REVIEW_PR_NUMBER: "4",
+          REVIEW_TARGET: JSON.stringify(expectedPr),
         },
       };
       await runPublisher(github, context, core, require, processMock);
@@ -254,6 +263,8 @@ const runPublisher = new AsyncFunction("github", "context", "core", "require", "
     // this path exercises the standalone trusted workflow fallback.
     writes = await publish({ second: changedSha, helper: false });
     assert.equal(writes.length, 0);
+    writes = await publish({ second: { ...expectedPr, state: "closed" } });
+    assert.equal(writes.length, 0);
     // Missing base adapter only updates an existing owned report; it must not
     // create a comment on a first-integration PR.
     writes = await publish({ comments: [ours], ready: "false", helper: false });
@@ -269,6 +280,99 @@ const runPublisher = new AsyncFunction("github", "context", "core", "require", "
     // the existing error-notification behavior even without prior comments.
     writes = await publish({ ready: "", helper: false });
     assert.deepEqual(writes.map(w => w.kind), ["create"]);
+
+
+    // Exercise the actual live-ref resolver used by both PR and dispatch runs.
+    const resolverStart = lines.findIndex(line => line.includes("- name: Resolve current PR snapshot"));
+    const resolverScript = lines.findIndex((line, index) =>
+      index > resolverStart && line === "          script: |"
+    );
+    const resolverEnd = lines.findIndex((line, index) =>
+      index > resolverScript && line.startsWith("      - name: ")
+    );
+    assert.ok(resolverStart >= 0 && resolverScript > resolverStart && resolverEnd > resolverScript);
+    const runResolver = new AsyncFunction("github", "context", "core", "process",
+      lines.slice(resolverScript + 1, resolverEnd)
+        .map(line => line.startsWith("            ") ? line.slice(12) : line)
+        .join("\n"));
+    const livePr = {
+      number: 4, state: "open",
+      head: { sha: newHead, repo: { full_name: "Antiokh/svesnost" } },
+      base: expectedPr.base, user: { login: "contributor" },
+    };
+    async function resolve(eventName, pr) {
+      const outputs = {};
+      await runResolver(
+        { rest: { pulls: { get: async args => {
+          assert.equal(args.pull_number, 4);
+          return { data: pr };
+        } } } },
+        { eventName, repo: { owner: "Antiokh", repo: "svesnost" } },
+        { info: () => {}, setOutput: (key, value) => { outputs[key] = value; } },
+        { env: { REVIEW_PR_NUMBER: "4" } },
+      );
+      return outputs;
+    }
+    const resolved = await resolve("workflow_dispatch", livePr);
+    assert.equal(resolved.active, "true");
+    assert.equal(resolved.head_sha, newHead);
+    assert.equal(resolved.base_sha, expectedPr.base.sha);
+    assert.deepEqual(JSON.parse(resolved.target), {
+      head: { sha: newHead }, base: expectedPr.base,
+    });
+    assert.equal((await resolve("pull_request", livePr)).active, "true");
+    for (const pr of [
+      { ...livePr, state: "closed" },
+      { ...livePr, base: { ...livePr.base, ref: "release" } },
+      { ...livePr, head: { ...livePr.head, repo: { full_name: "other/fork" } } },
+      { ...livePr, user: { login: "dependabot[bot]" } },
+    ]) {
+      assert.equal((await resolve("workflow_dispatch", pr)).active, "false");
+    }
+
+    // Exercise the new main-push dispatcher with filtered open PRs.
+    const refreshWorkflow = fs.readFileSync(
+      path.join(__dirname, "../workflows/humanizer-base-refresh.yml"), "utf8"
+    );
+    assert.ok(refreshWorkflow.includes("branches: [main]"));
+    assert.ok(refreshWorkflow.includes("actions: write"));
+    assert.ok(refreshWorkflow.includes("cancel-in-progress: true"));
+    const refreshLines = refreshWorkflow.split("\n");
+    const refreshStart = refreshLines.findIndex(line =>
+      line.includes("- name: Recheck open same-repository PRs targeting main")
+    );
+    const refreshScript = refreshLines.findIndex((line, index) =>
+      index > refreshStart && line === "          script: |"
+    );
+    assert.ok(refreshScript > refreshStart);
+    const dispatch = new AsyncFunction("github", "context", "core",
+      refreshLines.slice(refreshScript + 1)
+        .map(line => line.startsWith("            ") ? line.slice(12) : line)
+        .join("\n"));
+    const dispatched = [];
+    await dispatch({
+      paginate: async (_, args) => {
+        assert.equal(args.state, "open");
+        assert.equal(args.base, "main");
+        return [
+          livePr,
+          { ...livePr, number: 5, base: { ...livePr.base, ref: "release" } },
+          { ...livePr, number: 6, head: { ...livePr.head, repo: { full_name: "other/fork" } } },
+          { ...livePr, number: 7, user: { login: "dependabot[bot]" } },
+          { ...livePr, number: 8, state: "closed" },
+          { ...livePr, number: 9 },
+        ];
+      },
+      rest: { pulls: { list: () => {} }, actions: {
+        createWorkflowDispatch: async args => { dispatched.push(args); },
+      } },
+    }, { repo: { owner: "Antiokh", repo: "svesnost" } }, { info: () => {} });
+    assert.deepEqual(dispatched.map(item => item.inputs.pr_number), ["4", "9"]);
+    for (const args of dispatched) {
+      assert.equal(args.ref, "main");
+      assert.equal(args.workflow_id, "humanizer-review.yml");
+    }
+    console.log("Main update dispatch and current PR ref regression: OK");
 
     console.log("Humanizer retarget and PR publication regressions: OK");
   } finally {
