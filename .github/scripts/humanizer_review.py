@@ -1,0 +1,3439 @@
+#!/usr/bin/env python3
+"""Read-only, language-specific Humanizer PR review for Svesnost.
+
+Only authored article prose is sent to language engines. The whole frontmatter,
+code, JSX/MDX tags and props, expressions, URLs and Markdown syntax are excluded.
+No source file is ever rewritten.
+"""
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import re
+import sys
+from collections import Counter
+from pathlib import Path
+
+MARKER = "<!-- svesnost-humanizer-review -->"
+DOCS = "src/content/docs/"
+CYRILLIC = re.compile(r"[\u0400-\u04ff]")
+FENCE = re.compile(r"^ {0,3}(" + chr(96) + r"{3,}|~{3,})")
+REFERENCE = re.compile(r"^ {0,3}\[(?!\^)[^\]]+\]:[ \t]*(?=\S)")
+MODULE = re.compile(r"^\s*(?:import|export)\s+")
+RAW_ELEMENTS = frozenset({
+    "script", "style", "codeblock", "pre", "code",
+    "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+    "smarttable", "structtable", "supabasetable", "sanitytable",
+})
+TABLE_ELEMENTS = frozenset({
+    "table", "thead", "tbody", "tfoot", "tr", "th", "td",
+    "smarttable", "structtable", "supabasetable", "sanitytable",
+})
+
+
+def language(path: str) -> str | None:
+    if not path.startswith(DOCS) or not path.endswith((".md", ".mdx")):
+        return None
+    if path.startswith(DOCS + "ru/"):
+        return "ru"
+    if path.startswith(DOCS + "en/"):
+        return None
+    return "sr"
+
+
+def body_without_frontmatter(raw: str) -> str:
+    lines = raw.lstrip("\ufeff").splitlines(keepends=True)
+    if not lines or lines[0].rstrip("\r\n").rstrip(" \t") != "---":
+        return "".join(lines)
+    for index in range(1, len(lines)):
+        # A frontmatter closing delimiter starts at column zero. Indented
+        # --- and ... can be literal content of a YAML block scalar.
+        delimiter = lines[index].rstrip("\r\n").rstrip(" \t")
+        if delimiter in {"---", "..."}:
+            return "".join(lines[index + 1:])
+    return ""  # Fail closed: never treat unterminated YAML as prose.
+
+
+def hide(chars: list[str], start: int, end: int) -> None:
+    for pos in range(start, min(len(chars), end)):
+        if chars[pos] != "\n":
+            chars[pos] = " "
+
+
+def is_markdown_escaped(text: str, pos: int) -> bool:
+    """A delimiter is escaped iff an odd number of backslashes precedes it."""
+    backslashes = 0
+    pos -= 1
+    while pos >= 0 and text[pos] == "\\":
+        backslashes += 1
+        pos -= 1
+    return backslashes % 2 == 1
+
+
+def skip_js_regex(text: str, start: int) -> int | None:
+    """Scan a JS regex literal, respecting escapes and [...] character classes."""
+    preceding = text[:start].rstrip()
+    if (preceding and preceding[-1] not in "=([{,:;!?|&+-*%^~<>"
+            and not re.search(r"\b(?:return|case|throw|yield|await|of|in)\s*$", preceding)):
+        return None
+    index = start + 1
+    in_class = False
+    while index < len(text):
+        char = text[index]
+        if char in "\r\n":
+            return None
+        if char == "\\":
+            index += 2
+            continue
+        if char == "[":
+            in_class = True
+        elif char == "]" and in_class:
+            in_class = False
+        elif char == "/" and not in_class:
+            index += 1
+            while index < len(text) and text[index].isalpha():
+                index += 1
+            return index
+        index += 1
+    return None
+
+
+def end_brace(text: str, start: int) -> int:
+    depth = 0
+    quote = ""
+    escaped = False
+    pos = start
+    while pos < len(text):
+        char = text[pos]
+        if quote:
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = ""
+        elif text.startswith("//", pos):
+            newline = text.find("\n", pos + 2)
+            pos = len(text) if newline < 0 else newline
+            continue
+        elif text.startswith("/*", pos):
+            end = text.find("*/", pos + 2)
+            pos = len(text) if end < 0 else end + 2
+            continue
+        elif char in ("'", '"', chr(96)):
+            quote = char
+        elif char == "/":
+            regex_end = skip_js_regex(text, pos)
+            if regex_end is not None:
+                pos = regex_end
+                continue
+        elif char == "{":
+            depth += 1
+        elif char == "}":
+            depth -= 1
+            if depth == 0:
+                return pos + 1
+        pos += 1
+    return len(text)
+
+
+def end_tag(text: str, start: int) -> int:
+    pos = start + 1
+    quote = ""
+    while pos < len(text):
+        char = text[pos]
+        if quote:
+            # HTML/JSX quoted attributes do not use backslashes to escape
+            # a closing quote; only JS expressions inside {...} do.
+            if char == quote:
+                quote = ""
+        elif char in ("'", '"', chr(96)):
+            quote = char
+        elif char == "{":
+            pos = end_brace(text, pos)
+            continue
+        elif char == ">":
+            return pos + 1
+        pos += 1
+    return len(text)
+
+
+
+def _table_cells(line: str) -> list[str] | None:
+    """Split GFM cells on unescaped pipes outside matched backtick code spans."""
+    row = line.strip()
+    cells = []
+    cell_start = 0
+    delimiters = []
+    i = 0
+    while i < len(row):
+        if row[i] == "\\" and i + 1 < len(row):
+            i += 2
+            continue
+        if row[i] == chr(96):
+            ticks = len(row[i:]) - len(row[i:].lstrip(chr(96)))
+            j = i + ticks
+            closing = None
+            while j < len(row):
+                if row[j] == "\\" and j + 1 < len(row):
+                    j += 2
+                elif row[j] == chr(96):
+                    close_ticks = len(row[j:]) - len(row[j:].lstrip(chr(96)))
+                    if close_ticks == ticks:
+                        closing = j + close_ticks
+                        break
+                    j += close_ticks
+                else:
+                    j += 1
+            if closing is not None:
+                i = closing
+                continue
+            i += ticks
+            continue
+        if row[i] == "|":
+            cells.append(row[cell_start:i].strip())
+            delimiters.append(i)
+            cell_start = i + 1
+        i += 1
+    if not delimiters:
+        return None
+    cells.append(row[cell_start:].strip())
+    if delimiters[0] == 0:
+        cells.pop(0)
+    if delimiters[-1] == len(row) - 1:
+        cells.pop()
+    return cells
+
+
+
+def _unquote_line(line: str) -> tuple[str, int]:
+    """Remove Markdown blockquote container markers, preserving nested depth."""
+    content = line.rstrip("\r\n")
+    depth = 0
+    while match := re.match(r"^ {0,3}>[ \t]?", content):
+        content = content[match.end():]
+        depth += 1
+    return content, depth
+
+
+def _fence_line(line: str, list_indents: list[tuple[int, int]]) -> tuple[str, int]:
+    """The actual content line after blockquote or list indentation.
+
+    A four-space standalone code block must not start a fenced block, but
+    four-space indentation within a Markdown list is valid fence syntax.
+    """
+    visible, quote_depth = _unquote_line(line)
+    # A fence may start immediately after a list marker: "- ~~~js" or
+    # "1. " followed by a code fence, including inside a blockquote.
+    listed_fence = re.match(r"^ {0,3}(?:[-*+]|\d+[.)])[ \t]+(?=`{3,}|~{3,})", visible)
+    if listed_fence:
+        return visible[listed_fence.end():], quote_depth
+    if quote_depth:
+        return visible, quote_depth
+    indent = len(line) - len(line.lstrip(" "))
+    if indent <= 3:
+        return line.rstrip("\r\n"), 0
+    if list_indents and indent >= list_indents[-1][1]:
+        return line.lstrip(" ").rstrip("\r\n"), 0
+    return "", 0
+
+
+def _valid_fence_opener(line: str, match: re.Match[str] | None) -> bool:
+    """CommonMark disallows backticks in a backtick fence's info string."""
+    return (match is not None
+            and (match.group(1)[0] != "`" or "`" not in line[match.end():]))
+
+
+def mask_gfm_tables(text: str, chars: list[str]) -> None:
+    """Mask complete GFM tables, not just separator rows and pipe syntax."""
+    lines = text.splitlines(keepends=True)
+    starts = []
+    offset = 0
+    for line in lines:
+        starts.append(offset)
+        offset += len(line)
+
+    for index in range(1, len(lines)):
+        header_text, depth = _unquote_line(lines[index - 1])
+        separator_text, separator_depth = _unquote_line(lines[index])
+        if depth != separator_depth:
+            continue
+        header = _table_cells(header_text)
+        separators = _table_cells(separator_text)
+        if not header or not separators or len(header) != len(separators):
+            continue
+        if not all(re.fullmatch(r":?-{3,}:?", cell) for cell in separators):
+            continue
+        # A header fully hidden by fenced/indented code is not a table.
+        start = starts[index - 1]
+        if not any(char.strip() for char in chars[start:starts[index]]):
+            continue
+        end_index = index + 1
+        while end_index < len(lines):
+            row_text, row_depth = _unquote_line(lines[end_index])
+            # A GFM row may omit pipes entirely (only its first cell then
+            # contains text). The table ends at a blank line, a new block,
+            # or when the surrounding blockquote changes depth.
+            if row_depth != depth or not row_text.strip():
+                break
+            if re.match(
+                r"^ {0,3}(?:#{1,6}(?:[ \t]|$)|"
+                r"(?:[-*+]|\d+[.)])[ \t]+|"
+                r"`{3,}|~{3,}|"
+                r"(?:---|\*\*\*|___)[ \t]*$|"
+                # Inline tags <em>, <strong>, <a> remain table cell data.
+                r"<(?:!--|/?(?:address|article|aside|blockquote|body|"
+                r"center|details|div|dl|figure|footer|form|h[1-6]|header|"
+                r"hr|html|iframe|li|main|nav|ol|p|pre|script|section|"
+                r"style|table|tbody|td|tfoot|th|thead|tr|ul)\b))",
+                row_text
+            ):
+                break
+            row_start = starts[end_index]
+            if not any(c.strip() for c in chars[row_start:row_start + len(lines[end_index])]):
+                break
+            end_index += 1
+        for line_index in range(index - 1, end_index):
+            hide(chars, starts[line_index], starts[line_index] + len(lines[line_index]))
+
+
+def mask_inline_dollar_math(chars: list[str]) -> None:
+    """Mask $...$ math without consuming escaped dollars or unpaired currency."""
+    text = "".join(chars)
+
+    def escaped(pos: int) -> bool:
+        backslashes = 0
+        pos -= 1
+        while pos >= 0 and text[pos] == "\\":
+            backslashes += 1
+            pos -= 1
+        return backslashes % 2 == 1
+
+    def starts_currency(pos: int) -> bool:
+        """Protect a dollar-prefixed amount from being read as a math opener.
+
+        In "$100–$200" and "$5/$10" both dollar signs begin new amounts.
+        Arithmetic such as "$2+2$" and "$E=mc^2$" remains eligible as math.
+        """
+        match = re.match(r"\d+(?:[.,]\d+)*", text[pos + 1:])
+        if match is None:
+            return False
+        end = pos + 1 + match.end()
+        trailing = text[end:end + 1]
+        if trailing in ("/", "–", "—", "-"):
+            # A range without a second currency sign ($100–200) and a
+            # per-unit price ($100/час) remain prose even before later math.
+            numeric_tail = re.match(r"\s*\d+(?:[.,]\d+)*", text[end + 1:])
+            if numeric_tail:
+                after = text[end + 1 + numeric_tail.end():end + 2 + numeric_tail.end()]
+                if after != "$":  # $2-2$ and $2/2$ are still math.
+                    return True
+            if trailing == "/" and re.match(r"[^\W\d_]+", text[end + 1:]):
+                return True
+            next_dollar = text.find("$", end + 1)
+            return (next_dollar >= 0 and "\n" not in text[end:next_dollar]
+                    and next_dollar + 1 < len(text)
+                    and text[next_dollar + 1].isdigit() and not escaped(next_dollar))
+        if trailing in ("+", "*", "^", "=", "$"):
+            return False
+        if trailing and trailing.isalpha():
+            return False
+        if trailing.isspace():
+            # A numeric expression with spaced operators is math, not money.
+            line_end = text.find("\n", end)
+            suffix = text[end:line_end if line_end >= 0 else len(text)]
+            if re.match(
+                r"\s+[+\-*/=^]\s*[\w.]+(?:\s*[+\-*/=^]\s*[\w.]+)*\s*\x24",
+                suffix,
+            ):
+                return False
+        return not trailing or trailing.isspace() or trailing in ",.;:!?)]}"
+    pos = 0
+    while pos < len(text):
+        if (text[pos] != "$" or escaped(pos) or starts_currency(pos)
+                or (pos > 0 and text[pos - 1] == "$")
+                or (pos + 1 < len(text) and (text[pos + 1] == "$" or text[pos + 1].isspace()))):
+            pos += 1
+            continue
+        end = pos + 1
+        while end < len(text) and text[end] != "\n":
+            if text[end] == "$" and not escaped(end) and (end + 1 == len(text) or text[end + 1] != "$"):
+                if not text[end - 1].isspace():
+                    hide(chars, pos, end + 1)
+                    pos = end + 1
+                    break
+            end += 1
+        else:
+            pos += 1
+
+
+def valid_inline_link_payload(payload: str) -> bool:
+    """Accept only a CommonMark destination and optional quoted title."""
+    if re.search(r"\r?\n[ \t]*\r?\n", payload):
+        return False
+    # CommonMark permits a soft line break before the destination, but not
+    # inside a bare destination or across a blank line.
+    value = payload.lstrip(" \t\r\n")
+    if not value:
+        return True
+    if value[0] == "<":
+        end = 1
+        while end < len(value) and value[end] != ">":
+            if value[end] == "\\" and end + 1 < len(value):
+                end += 2
+                continue
+            if value[end] in "<\n\r":
+                return False
+            end += 1
+        if end == len(value):
+            return False
+        end += 1
+    else:
+        end = 0
+        nesting = 0
+        while end < len(value) and not value[end].isspace():
+            if value[end] == "\\" and end + 1 < len(value):
+                end += 2
+                continue
+            if value[end] == "<":
+                return False
+            if value[end] == "(":
+                nesting += 1
+            elif value[end] == ")":
+                nesting -= 1
+                if nesting < 0:
+                    return False
+            end += 1
+        if nesting:
+            return False
+    trailer = value[end:]
+    if not trailer:
+        return True
+    if not trailer[0].isspace():
+        return False
+    title = trailer.strip()
+    if not title:
+        return True
+    if title[0] not in ("'", '"', "("):
+        return False
+    closing = ")" if title[0] == "(" else title[0]
+    index = 1
+    while index < len(title):
+        if title[index] == "\\" and index + 1 < len(title):
+            index += 2
+            continue
+        if title[index] == closing:
+            return not title[index + 1:].strip()
+        index += 1
+    return False
+
+
+def markdown_code_spans(text: str) -> list[tuple[int, int]]:
+    """Identify paired CommonMark code spans without quadratic rescanning."""
+    runs = list(re.finditer(r"`+", text))
+    next_end: dict[int, int] = {}
+    matches: dict[int, int] = {}
+    for run in reversed(runs):
+        if is_markdown_escaped(text, run.start()):
+            continue
+        width = run.end() - run.start()
+        if width in next_end:
+            matches[run.start()] = next_end[width]
+        next_end[width] = run.end()
+    spans: list[tuple[int, int]] = []
+    skip_until = 0
+    for run in runs:
+        if run.start() < skip_until:
+            continue
+        end = matches.get(run.start())
+        if end is not None:
+            spans.append((run.start(), end))
+            skip_until = end
+    return spans
+
+
+def markdown_bracket_pairs(text: str) -> dict[int, int]:
+    """Match link-label brackets, skipping code spans and escaped delimiters."""
+    pairs: dict[int, int] = {}
+    stack: list[int] = []
+    code_spans = markdown_code_spans(text)
+    code_index = 0
+    index = 0
+    while index < len(text):
+        if code_index < len(code_spans) and index == code_spans[code_index][0]:
+            index = code_spans[code_index][1]
+            code_index += 1
+            continue
+        char = text[index]
+        if char == "\\" and index + 1 < len(text):
+            index += 2
+            continue
+        if char == "\n" and (
+            text.startswith("\n", index + 1)
+            or text.startswith("\r\n", index + 1)
+        ):
+            stack.clear()  # A blank line cannot occur inside link text.
+        if char == "[":
+            stack.append(index)
+        elif char == "]" and stack:
+            pairs[stack.pop()] = index
+        index += 1
+    return pairs
+
+
+def markdown_raw_paren_openers(text: str) -> set[int]:
+    """Find structurally matched parens for fast rejection of broken links.
+
+    Quoted titles and angle destinations can have unbalanced literal parens,
+    so an absent raw match is only decisive without either form.
+    """
+    stack: list[int] = []
+    matched: set[int] = set()
+    index = 0
+    while index < len(text):
+        if text[index] == "\\" and index + 1 < len(text):
+            index += 2
+            continue
+        if text[index] == "(":
+            stack.append(index)
+        elif text[index] == ")" and stack:
+            matched.add(stack.pop())
+        index += 1
+    return matched
+
+
+def markdown_inline_links(text: str) -> list[tuple[int, int, int, int, bool]]:
+    """Find complete inline links/images, balancing destination parentheses.
+
+    Return (start, end, label_start, label_end, is_image) for valid spans.
+    The title may be quoted, so a ')' inside a title is not a link closer.
+    """
+    spans = []
+    pairs = markdown_bracket_pairs(text)
+    # Long URLs and data: images are valid Markdown and must be fully masked.
+    # Precompute raw matching parens to reject clearly unclosed candidates
+    # without repeatedly scanning their long malformed suffixes.
+    raw_paired_openers = markdown_raw_paren_openers(text)
+    next_close = [-1] * (len(text) + 1)
+    next_space = [len(text)] * (len(text) + 1)
+    next_quote = {q: [-1] * (len(text) + 1) for q in ("'", '"')}
+    following_quote = {"'": -1, '"': -1}
+    following_close = -1
+    following_space = len(text)
+    for index in range(len(text) - 1, -1, -1):
+        if text[index] == ")":
+            following_close = index
+        if text[index].isspace():
+            following_space = index
+        if text[index] in following_quote and not is_markdown_escaped(text, index):
+            following_quote[text[index]] = index
+        next_close[index] = following_close
+        next_space[index] = following_space
+        for q in following_quote:
+            next_quote[q][index] = following_quote[q]
+    # An unclosed <destination> must not cause repeated scans of every
+    # following candidate. Build an O(n) suffix index that only accepts a
+    # closing unescaped '>' before any illegal '<' or line break.
+    angle_destination_end = [-1] * (len(text) + 1)
+    next_angle_end = -1
+    next_nonspace = [len(text)] * (len(text) + 1)
+    next_visible = len(text)
+    for index in range(len(text) - 1, -1, -1):
+        char = text[index]
+        if char == ">" and not is_markdown_escaped(text, index):
+            next_angle_end = index
+        elif char in "<\r\n" and (char != "<" or not is_markdown_escaped(text, index)):
+            next_angle_end = -1
+        angle_destination_end[index] = next_angle_end
+        if not char.isspace():
+            next_visible = index
+        next_nonspace[index] = next_visible
+    pos = 0
+    # A link destination is opaque Markdown metadata. Walk only its label
+    # for nested images (e.g. [![alt](src)](href)), then jump past the URL.
+    # Each frame holds (label_end, resume_after_link).
+    label_ranges: list[tuple[int, int]] = []
+    while pos < len(text):
+        if label_ranges and pos >= label_ranges[-1][0]:
+            pos = label_ranges.pop()[1]
+            continue
+        scan_limit = label_ranges[-1][0] if label_ranges else len(text)
+        image = text.startswith("![", pos) and not is_markdown_escaped(text, pos)
+        bracket = pos + 1 if image else pos
+        if (bracket >= len(text) or text[bracket] != "["
+                or is_markdown_escaped(text, bracket)):
+            pos += 1
+            continue
+        label_start = bracket + 1
+        label_end = pairs.get(bracket)
+        if (label_end is None or label_end + 1 >= scan_limit
+                or text[label_end + 1] != "("):
+            pos += 1
+            continue
+        cursor = label_end + 2
+        opener = label_end + 1
+        if next_close[cursor] < 0 or next_close[cursor] >= scan_limit:
+            pos += 1
+            continue
+        if opener not in raw_paired_openers:
+            # Angle destinations and quoted titles may have unmatched
+            # literal parentheses; those still need a complete parse.
+            first = next_nonspace[cursor]
+            if first < len(text) and text[first] == "<":
+                angle_end = angle_destination_end[first + 1]
+                if angle_end < 0:
+                    pos += 1
+                    continue
+                # After an angle destination only ')' or whitespace followed
+                # by ')' / a quoted title is grammatical. Reject a malformed
+                # shared suffix before entering the potentially long scan.
+                trailer = next_nonspace[angle_end + 1]
+                if (trailer == len(text) or text[trailer] not in ")(\'\""
+                        or (trailer == angle_end + 1 and text[trailer] != ")")):
+                    pos += 1
+                    continue
+            else:
+                # When a raw ')' does not close this opener, a valid bare
+                # destination is only possible if literal parentheses inside
+                # a *closed quoted title* confused the raw parentheses stack.
+                # Validate the title boundary in O(1) using suffix indexes,
+                # rather than rescanning a long malformed suffix for each '['.
+                if first == len(text):
+                    pos += 1
+                    continue
+                destination_end = next_space[first]
+                title_start = next_nonspace[destination_end]
+                if title_start == len(text) or text[title_start] not in ("'", '"'):
+                    pos += 1
+                    continue
+                title_end = next_quote[text[title_start]][title_start + 1]
+                if (title_end < 0 or next_nonspace[title_end + 1] == len(text)
+                        or text[next_nonspace[title_end + 1]] != ")"):
+                    pos += 1
+                    continue
+        scan_end = scan_limit
+        parens = 1
+        title_quote = None
+        angle_destination = False
+        destination_started = False
+        while cursor < scan_end:
+            char = text[cursor]
+            # A line break may separate the destination from a closing ')' or
+            # precede the destination. valid_inline_link_payload() checks
+            # these boundaries and rejects newlines inside bare destinations.
+            if char == "\\" and cursor + 1 < len(text):
+                cursor += 2
+                continue
+            if angle_destination:
+                # A <destination> may contain unbalanced parentheses; only
+                # the closing > ends it, not an intervening ).
+                if char == ">":
+                    angle_destination = False
+                cursor += 1
+                continue
+            if char == "<" and not destination_started and not title_quote:
+                angle_destination = True
+                destination_started = True
+                cursor += 1
+                continue
+            if not char.isspace():
+                destination_started = True
+            if title_quote:
+                if char == title_quote:
+                    title_quote = None
+            elif char in ("'", '"') and cursor > label_end + 2 and text[cursor - 1].isspace():
+                title_quote = char
+            elif char == "(":
+                parens += 1
+            elif char == ")":
+                parens -= 1
+                if parens == 0:
+                    if not valid_inline_link_payload(text[label_end + 2:cursor]):
+                        pos += 1
+                        break
+                    spans.append((pos, cursor + 1, label_start, label_end, image))
+                    # Only the label can contain another rendered image;
+                    # rescanning the destination creates false links and O(n²)
+                    # work on long balanced URLs with bracket-like text.
+                    label_ranges.append((label_end, cursor + 1))
+                    pos = label_start
+                    break
+            cursor += 1
+        else:
+            pos += 1
+    return spans
+
+
+def mask_inline_link_targets(text: str, chars: list[str]) -> None:
+    """Keep visible link labels, mask the full balanced target and title."""
+    for start, end, label_start, label_end, image in markdown_inline_links(text):
+        if image:
+            hide(chars, start, end)
+        else:
+            hide(chars, start, label_start)
+            hide(chars, label_end, end)
+
+
+def normalize_reference_label(label: str) -> str:
+    return re.sub(r"\s+", " ", label).strip().casefold()
+
+
+def mask_reference_definitions(text: str, chars: list[str]) -> set[str]:
+    """Mask complete CommonMark link-reference definitions, not paragraph text.
+
+    A definition cannot interrupt a paragraph. Its destination can follow
+    the colon on the next line, and the optional title may span several lines.
+    Blockquote prefixes belong to the container, not the reference value.
+    """
+    labels: set[str] = set()
+    lines = "".join(chars).splitlines(keepends=True)
+    offsets: list[int] = []
+    offset = 0
+    for line in lines:
+        offsets.append(offset)
+        offset += len(line)
+
+    def visible_line(index: int) -> tuple[str, int]:
+        content, depth = _unquote_line(lines[index])
+        return content.rstrip("\r\n"), depth
+
+    def title_end(start_line: int, pos: int, depth: int) -> int | None:
+        source, _ = visible_line(start_line)
+        opening = source[pos]
+        closing = ")" if opening == "(" else opening
+        for number in range(start_line, len(lines)):
+            content, actual_depth = visible_line(number)
+            if actual_depth != depth or not content.strip():
+                return None
+            cursor = pos + 1 if number == start_line else 0
+            while cursor < len(content):
+                if content[cursor] == "\\" and cursor + 1 < len(content):
+                    cursor += 2
+                    continue
+                if content[cursor] == closing:
+                    return number if not content[cursor + 1:].strip() else None
+                cursor += 1
+        return None
+
+    paragraph_depth: int | None = None
+    index = 0
+    while index < len(lines):
+        line, depth = visible_line(index)
+        stripped = line.strip()
+        if not stripped:
+            paragraph_depth = None
+            index += 1
+            continue
+        if paragraph_depth is not None and paragraph_depth != depth:
+            paragraph_depth = None
+        # Markdown heading, list, thematic break and JSX block boundaries
+        # interrupt the preceding paragraph; reference definitions do not.
+        structural = re.match(
+            r"^ {0,3}(?:#{1,6}[ \t]|[-*+][ \t]|\d+[.)][ \t]|"
+            r"<(?:/?[A-Za-z]|!--)|(?:---|\*\*\*|___)[ \t]*$)",
+            line,
+        )
+        if structural:
+            paragraph_depth = None
+        if paragraph_depth is not None:
+            index += 1
+            continue
+
+        marker = re.match(r"^ {0,3}\[((?:\\.|[^\]\\\n])+)\]:[ \t]*(.*)$", line)
+        if not marker or marker.group(1).startswith("^"):
+            paragraph_depth = None if structural else depth
+            index += 1
+            continue
+
+        value = marker.group(2)
+        end_index = index
+        if not value.strip():
+            if index + 1 >= len(lines):
+                paragraph_depth = depth
+                index += 1
+                continue
+            following, following_depth = visible_line(index + 1)
+            if (following_depth != depth or not following.strip()
+                    or len(following) - len(following.lstrip(" ")) > 3):
+                paragraph_depth = depth
+                index += 1
+                continue
+            end_index = index + 1
+            value = following.lstrip(" \t")
+
+        # Separate one destination token from the optional title. A quoted
+        # destination <...> may contain spaces; a bare destination may not.
+        if value.startswith("<"):
+            # CommonMark also allows an explicitly empty destination: <>.
+            match = re.match(r"^<[^<>\r\n]*>", value)
+        else:
+            match = re.match(r"^[^\s<>]+", value)
+            # Apply the same balancing and backslash rules used by inline
+            # links. An invalid definition must remain reader-visible prose.
+            if match and not valid_inline_link_payload(match.group(0)):
+                match = None
+        if not match:
+            paragraph_depth = depth
+            index += 1
+            continue
+        tail = value[match.end():]
+        if tail.strip():
+            if not tail[0].isspace() or tail.lstrip()[0] not in ("'", '"', "("):
+                paragraph_depth = depth
+                index += 1
+                continue
+            # title_end needs the position in the original visible line.
+            source, _ = visible_line(end_index)
+            opener = source.find(tail.lstrip(), source.find(match.group(0)))
+            if opener < 0:
+                paragraph_depth = depth
+                index += 1
+                continue
+            last_title = title_end(end_index, opener, depth)
+            if last_title is None:
+                paragraph_depth = depth
+                index += 1
+                continue
+            end_index = last_title
+        elif end_index + 1 < len(lines):
+            continuation, continuation_depth = visible_line(end_index + 1)
+            title_match = re.match(r"^ {1,3}([\"'(])", continuation)
+            if continuation_depth == depth and title_match:
+                last_title = title_end(end_index + 1, title_match.start(1), depth)
+                if last_title is not None:
+                    end_index = last_title
+
+        for line_index in range(index, end_index + 1):
+            hide(chars, offsets[line_index], offsets[line_index] + len(lines[line_index]))
+        labels.add(normalize_reference_label(marker.group(1)))
+        paragraph_depth = None
+        index = end_index + 1
+    return labels
+
+def mask_shortcut_reference_images(chars: list[str], labels: set[str]) -> None:
+    """Mask resolved image shortcuts, including escaped or nested brackets."""
+    if not labels:
+        return
+    source = "".join(chars)
+    pairs = markdown_bracket_pairs(source)
+    for match in re.finditer(r"!\[", source):
+        # \![label] is a literal '!' followed by a visible reference link.
+        if is_markdown_escaped(source, match.start()):
+            continue
+        label_open = match.start() + 1
+        label_end = pairs.get(label_open)
+        if label_end is None or (
+            label_end + 1 < len(source) and source[label_end + 1] in "(["
+        ):
+            continue  # Inline images and full references are handled elsewhere.
+        label = source[label_open + 1:label_end]
+        if normalize_reference_label(label) in labels:
+            hide(chars, match.start(), label_end + 1)
+
+
+def mask_full_reference_links(chars: list[str], labels: set[str]) -> None:
+    """Mask identifiers of resolved full references, including nested labels.
+
+    Markdown link text may contain balanced brackets and code spans; a flat
+    regular expression would leak reference IDs from such links.
+    """
+    if not labels:
+        return
+    source = "".join(chars)
+    pairs = markdown_bracket_pairs(source)
+    pos = 0
+    while pos < len(source):
+        image = (source.startswith("![", pos)
+                 and not is_markdown_escaped(source, pos))
+        bracket = pos + 1 if image else pos
+        if (bracket >= len(source) or source[bracket] != "["
+                or is_markdown_escaped(source, bracket)):
+            pos += 1
+            continue
+        label_end = pairs.get(bracket)
+        if (label_end is None or label_end + 1 >= len(source)
+                or source[label_end + 1] != "["):
+            pos += 1
+            continue
+        reference_start = label_end + 1
+        reference_end = pairs.get(reference_start)
+        if reference_end is None:
+            pos += 1
+            continue
+        reference_label = source[reference_start + 1:reference_end]
+        if not reference_label:
+            reference_label = source[bracket + 1:label_end]
+        if normalize_reference_label(reference_label) not in labels:
+            pos += 1
+            continue
+        if image:
+            hide(chars, pos, reference_end + 1)
+        else:
+            hide(chars, bracket, bracket + 1)
+            hide(chars, label_end, reference_end + 1)
+        pos = reference_end + 1
+
+
+def mask_footnote_identifiers(chars: list[str]) -> None:
+    """Hide defined footnote IDs; retain escaped literals and unresolved text."""
+    source = "".join(chars)
+    identifier = re.compile(r"\[\^((?:\\.|[^\]\\\n])+)\](?=:?)")
+    definitions: set[str] = set()
+    offset = 0
+    for line in source.splitlines(keepends=True):
+        visible, _ = _unquote_line(line)
+        definition = re.match(r"^ {0,3}\[\^((?:\\.|[^\]\\\n])+)\]:[ \t]*", visible)
+        if definition:
+            marker_at = offset + len(line.rstrip("\r\n")) - len(visible)
+            if not is_markdown_escaped(source, marker_at):
+                definitions.add(normalize_reference_label(definition.group(1)))
+        offset += len(line)
+    if not definitions:
+        return
+    for match in identifier.finditer(source):
+        if (not is_markdown_escaped(source, match.start())
+                and normalize_reference_label(match.group(1)) in definitions):
+            hide(chars, *match.span())
+
+
+def mask_uri_autolinks(chars: list[str]) -> None:
+    """Hide CommonMark URI and email autolinks outside protected markup.
+
+    URI schemes have 2–32 ASCII characters. Email autolinks use the
+    CommonMark local-part and domain grammar; both types are enclosed in
+    unescaped angle brackets. The live shadow has code/targets masked first.
+    """
+    source = "".join(chars)
+    patterns = (
+        re.compile(r"<[A-Za-z][A-Za-z0-9.+-]{1,31}:[^\x00-\x20<>]+>"),
+        re.compile(
+            r"<[A-Za-z0-9.!#$%&'*+/=?^_\x60{|}~-]+@"
+            r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+            r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)*>"
+        ),
+    )
+    for pattern in patterns:
+        for match in pattern.finditer(source):
+            if not is_markdown_escaped(source, match.start()):
+                hide(chars, *match.span())
+
+
+def mask_bare_urls(chars: list[str]) -> None:
+    """Mask http(s) URLs in one pass, without rescanning nested schemes."""
+    text = "".join(chars)
+    pattern = re.compile(r"https?://")
+    pos = 0
+    while match := pattern.search(text, pos):
+        start = match.start()
+        end = match.end()
+        parens = 0
+        while end < len(text):
+            char = text[end]
+            if char.isspace() or char in '<>"' + "'[]":
+                break
+            if char == "(":
+                parens += 1
+            elif char == ")":
+                if parens == 0:
+                    break
+                parens -= 1
+            elif char == "\\" and end + 1 < len(text):
+                end += 2
+                continue
+            end += 1
+        hide(chars, start, end)
+        pos = end  # Ignore every nested https:// inside this URL token.
+
+
+def mask_gfm_autolinks(chars: list[str]) -> None:
+    """Mask extended GFM www/email autolinks but retain adjacent punctuation."""
+    source = "".join(chars)
+
+    def trim_url_tail(start: int, end: int) -> int:
+        unmatched_close = (source[start:end].count(")") -
+                           source[start:end].count("("))
+        while end > start:
+            if source[end - 1] in "?!.,:*_~":
+                end -= 1
+            elif source[end - 1] == ")" and unmatched_close > 0:
+                unmatched_close -= 1
+                end -= 1
+            else:
+                break
+        # A trailing '&name;' is an entity, not part of the URL.
+        entity = re.search(r"&[A-Za-z0-9]+;$", source[start:end])
+        return start + entity.start() if entity else end
+
+    # A www autolink begins after whitespace or one of *_~( and contains
+    # at least two domain separators, with no '_' in its last two labels.
+    domain = re.compile(r"www\.(?:[A-Za-z0-9_-]+\.)+[A-Za-z0-9_-]+")
+    pos = 0
+    while match := domain.search(source, pos):
+        start = match.start()
+        pos = match.end()
+        if (start and not source[start - 1].isspace()
+                and source[start - 1] not in "*_~("):
+            continue
+        labels = match.group().split(".")
+        if "_" in labels[-1] or "_" in labels[-2]:
+            continue
+        end = match.end()
+        while end < len(source) and not source[end].isspace() and source[end] != "<":
+            end += 1
+        hide(chars, start, trim_url_tail(start, end))
+        pos = end
+
+    source = "".join(chars)
+    # Escaped <mailto:...> and <name@domain> are visible Markdown
+    # literals, not autolinks. Do not re-mask their addresses as GFM emails.
+    escaped_angles = [
+        (m.start(), m.end())
+        for m in re.finditer(r"<[^\s<>]+>", source)
+        if is_markdown_escaped(source, m.start())
+    ]
+    protected_index = 0
+    email = re.compile(
+        r"(?<![A-Za-z0-9.+_-])(?:mailto:|xmpp:)?"
+        r"[A-Za-z0-9.+_-]+@[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+)+"
+    )
+    for match in email.finditer(source):
+        while (protected_index < len(escaped_angles) and
+               escaped_angles[protected_index][1] <= match.start()):
+            protected_index += 1
+        if (protected_index < len(escaped_angles) and
+                escaped_angles[protected_index][0] <= match.start()):
+            continue
+        end = match.end()
+        if (source[end - 1] in "-_" or
+                (end < len(source) and source[end] in "-_")):
+            continue
+        hide(chars, match.start(), end)
+
+def mask_inline_paren_math(chars: list[str]) -> None:
+    """Exclude balanced TeX \(...\), not escaped Markdown literal \\(."""
+    text = "".join(chars)
+    pos = 0
+    while True:
+        start = text.find(r"\(", pos)
+        if start < 0:
+            return
+        if is_markdown_escaped(text, start):
+            pos = start + 2
+            continue
+        close = text.find(r"\)", start + 2)
+        while close >= 0 and is_markdown_escaped(text, close):
+            close = text.find(r"\)", close + 2)
+        if close < 0:
+            pos = start + 2
+            continue
+        hide(chars, start, close + 2)
+        pos = close + 2
+
+
+
+def find_matching_raw_close(text: str, opening_end: int, tag: str, *,
+                            is_mdx: bool = True) -> int | None:
+    """Find a matching raw closing tag, ignoring protected/JSX tokens.
+
+    Raw containers treat fenced delimiters as literal text, so the opening
+    tag may be validated against a masked view, but the closing scanner
+    must read original content and skip JSX expressions itself.
+    """
+    source = text
+    tag_pattern = re.compile(r"</?([A-Za-z][\w.:-]*)(?=[\s/>])")
+    token_pattern = re.compile(r"[<{]" if is_mdx else r"<")
+    depth = 1
+    pos = opening_end
+    while pos < len(text):
+        token = token_pattern.search(source, pos)
+        if token is None:
+            return None
+        start = token.start()
+        if token.group() == "{":
+            if not is_markdown_escaped(source, start):
+                expression_end = end_brace(text, start)
+                if expression_end > start and text[expression_end - 1] == "}":
+                    pos = expression_end
+                    continue
+            pos = start + 1
+            continue
+        if source.startswith("<!--", start):
+            comment_end = source.find("-->", start + 4)
+            if comment_end < 0:
+                return None
+            pos = comment_end + 3
+            continue
+        match = tag_pattern.match(source, start)
+        if not match:
+            pos = start + 1
+            continue
+        # end_tag consumes quoted attributes and their embedded markup.
+        end = end_tag(text, start)
+        if end <= start or end == len(text) and ">" not in text[start:end]:
+            return None
+        if match.group(1).casefold() == tag.casefold():
+            if source.startswith("</", start):
+                depth -= 1
+                if depth == 0:
+                    return end
+            elif not text[start:end].rstrip().endswith("/>"):
+                depth += 1
+        pos = end
+    return None
+
+def mask_fenced_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None:
+    """Mask code fences including list-indented and quoted Markdown fences.
+
+    Existing masks (e.g. raw HTML code containers) are respected, so fences
+    inside them cannot hide following reader-visible prose.
+    """
+    offset = 0
+    in_fence = None
+    in_math = None
+    in_comment = False
+    list_indents: list[tuple[int, int]] = []
+    # A code span may cross line boundaries. A standalone "$" or "\["
+    # inside it is inline code, not a display-math opener. Protect the marker
+    # while keeping real fenced-code state authoritative.
+    code_spans = markdown_code_spans("".join(chars))
+    code_index = 0
+    # Comments are masked before code fences, but markers inside an already
+    # open fence are code literals rather than HTML comments.
+    comment_lines = iter(html_comment_scan_view("".join(chars), is_mdx).splitlines(keepends=True))
+    for original_line in "".join(chars).splitlines(keepends=True):
+        comment_line = next(comment_lines)
+        line = original_line
+        if not in_fence:
+            line, in_comment = mask_html_comments_in_line(
+                comment_line, chars, offset, in_comment
+            )
+        trimmed = line.lstrip()
+        indent = len(line) - len(trimmed)
+        if not in_fence and not in_comment:
+            marker = re.match(r"^( *)(?:[-*+]|\d+[.)])\s+", line)
+            if marker:
+                if indent < 4 or list_indents:
+                    while list_indents and list_indents[-1][0] >= indent:
+                        list_indents.pop()
+                    list_indents.append((indent, len(marker.group(0))))
+            elif trimmed.strip() and list_indents and indent < list_indents[0][1]:
+                list_indents.clear()
+        fence_text, quote_depth = _fence_line(line, list_indents)
+        fence = FENCE.match(fence_text)
+        math_text = fence_text.lstrip()
+        math_list = re.match(r"^(?:[-*+]|\d+[.)])\s+", math_text)
+        if math_list:
+            math_text = math_text[math_list.end():]
+        code_math = False
+        if math_text.startswith((chr(36) * 2, r"\[")):
+            candidate = line.find(math_text)
+            if candidate >= 0:
+                marker_pos = offset + candidate
+                while code_index < len(code_spans) and code_spans[code_index][1] <= marker_pos:
+                    code_index += 1
+                code_math = (code_index < len(code_spans)
+                             and code_spans[code_index][0] < marker_pos
+                             and marker_pos < code_spans[code_index][1])
+        # A quote boundary ends an unfinished quoted code/math block.
+        if in_fence and quote_depth < in_fence[2]:
+            in_fence = None
+        if in_math and quote_depth < in_math[1]:
+            in_math = None
+        if in_fence:
+            hide(chars, offset, offset + len(line))
+            if (quote_depth == in_fence[2] and fence
+                    and fence.group(1)[0] == in_fence[0]
+                    and len(fence.group(1)) >= in_fence[1]
+                    and not fence_text[fence.end():].strip()):
+                in_fence = None
+        elif in_math:
+            hide(chars, offset, offset + len(line))
+            if quote_depth == in_math[1] and in_math[0] in math_text:
+                in_math = None
+        elif not in_comment and not code_math and math_text.startswith((chr(36) * 2, r"\[")):
+            closing = chr(36) * 2 if math_text.startswith(chr(36) * 2) else r"\]"
+            hide(chars, offset, offset + len(line))
+            if closing not in math_text[2:]:
+                in_math = (closing, quote_depth)
+        elif not in_comment and _valid_fence_opener(fence_text, fence):
+            token = fence.group(1)
+            in_fence = (token[0], len(token), quote_depth)
+            hide(chars, offset, offset + len(line))
+        offset += len(line)
+
+
+def mdx_container_prose_lines(text: str) -> set[int]:
+    """Find reader-facing Markdown indented inside non-raw JSX containers.
+
+    MDX components like Aside, Steps and Accordion nest Markdown children.
+    Their formatting indentation is not an independent four-space code
+    block. Preserve ordinary prose and list items up to six (or more
+    relative) spaces, but leave substantially deeper indented code to the
+    Markdown code scanner after a block boundary.
+    """
+    view_chars = list(text)
+    mask_fenced_blocks(text, view_chars)
+    view = "".join(view_chars)
+    result: set[int] = set()
+    containers: list[tuple[str, int]] = []
+    offset = 0
+    for line in view.splitlines(keepends=True):
+        visible = line.rstrip("\r\n")
+        indent = len(visible) - len(visible.lstrip(" "))
+        match = re.match(r"^[ \t]*<(/?)([A-Z][\w.:-]*)(?=[\s/>])", visible)
+        if match and match.group(2).lower() not in RAW_ELEMENTS:
+            tag = match.group(2)
+            if match.group(1):
+                for index in range(len(containers) - 1, -1, -1):
+                    if containers[index][0] == tag:
+                        containers = containers[:index]
+                        break
+            elif containers or indent <= 3:
+                end = end_tag(visible, visible.find("<", match.start(), match.end()))
+                if not visible[:end].rstrip().endswith("/>"):
+                    containers.append((tag, indent))
+        elif (containers and visible.strip() and indent >= 4
+              and indent < containers[-1][1] + 8):
+            result.add(offset)
+        offset += len(line)
+    return result
+
+
+def ordinary_paragraph_continuations(text: str) -> set[int]:
+    """Mark indented paragraph continuations in Markdown and blockquotes.
+
+    Four leading spaces are visible text when a paragraph is already open;
+    after a blank they start code instead. In quoted lists, continuation
+    indentation is relative to the list marker rather than the '>' prefix.
+    """
+    offsets: set[int] = set()
+    paragraph_open = False
+    active_depth = 0
+    quoted_list_indent: int | None = None
+    offset = 0
+    for line in text.splitlines(keepends=True):
+        visible, quote_depth = _unquote_line(line)
+        stripped = visible.strip()
+        indent = len(visible) - len(visible.lstrip(" "))
+        if quote_depth != active_depth:
+            paragraph_open = False
+            quoted_list_indent = None
+        if not stripped:
+            paragraph_open = False
+        else:
+            list_marker = re.match(r"^ *(?:[-*+]|\d+[.)])[ \t]+", visible)
+            if list_marker and quote_depth:
+                quoted_list_indent = len(list_marker.group(0))
+                paragraph_open = True
+            elif indent >= 4:
+                # Code cannot interrupt an existing paragraph. A quoted list
+                # may also resume after a blank at its content indentation;
+                # indented code needs four additional spaces.
+                if (paragraph_open or (quote_depth and quoted_list_indent is not None
+                        and quoted_list_indent <= indent < quoted_list_indent + 4)):
+                    offsets.add(offset)
+                    paragraph_open = True
+                else:
+                    paragraph_open = False
+            else:
+                if (quoted_list_indent is not None and indent < quoted_list_indent
+                        and not list_marker):
+                    quoted_list_indent = None
+                paragraph_open = not bool(re.match(
+                    r"^ {0,3}(?:#{1,6}\s|[-*+]\s|\d+[.)]\s|"
+                    r"[" + chr(96) + r"~]{3,}|"
+                    r"<(?:/?[A-Za-z]|!--)|\[\^[^\]]+\]:|"
+                    r"(?:import|export)\s+|(?:---|\*\*\*|___)\s*$)",
+                    visible
+                ))
+        active_depth = quote_depth
+        offset += len(line)
+    return offsets
+
+def mask_indented_code_before_blocks(text: str, chars: list[str],
+                                     paragraph_lines: set[int],
+                                     mdx_prose_lines: set[int]) -> None:
+    """Hide indented code before detecting ESM declarations or HTML raw tags.
+
+    Preserve nested list prose and multiline footnote continuations. Code
+    inside lists starts after a blank line at list-content-indent + 4 and
+    continues until the next nonblank line dedents.
+    """
+    offset = 0
+    list_indents: list[tuple[int, int]] = []
+    list_code_indent: int | None = None
+    after_blank = False
+    in_footnote = False
+    for line in "".join(chars).splitlines(keepends=True):
+        trimmed = line.lstrip()
+        indent = len(line) - len(trimmed)
+        visible, quote_depth = _unquote_line(line)
+        quote_indent = len(visible) - len(visible.lstrip(" "))
+        if list_code_indent is not None:
+            if not trimmed.strip() or indent >= list_code_indent:
+                hide(chars, offset, offset + len(line))
+                offset += len(line)
+                continue
+            list_code_indent = None
+
+        footnote = re.match(r"^ {0,3}\[\^[^\]\n]+\]:[ \t]*", line)
+        if footnote:
+            in_footnote = True
+        elif trimmed.strip() and indent < 4:
+            in_footnote = False
+
+        marker = re.match(r"^( *)(?:[-*+]|\d+[.)])\s+", line)
+        if not trimmed.strip():
+            after_blank = bool(list_indents)
+        elif footnote:
+            after_blank = False
+        elif in_footnote and 4 <= indent < 8:
+            after_blank = False
+        elif marker:
+            if indent >= 4 and not list_indents and offset not in mdx_prose_lines:
+                hide(chars, offset, offset + len(line))
+            else:
+                while list_indents and list_indents[-1][0] >= indent:
+                    list_indents.pop()
+                list_indents.append((indent, len(marker.group(0))))
+            after_blank = False
+        elif quote_depth and quote_indent >= 4:
+            if offset not in paragraph_lines and offset not in mdx_prose_lines:
+                hide(chars, offset, offset + len(line))
+            after_blank = False
+        elif indent >= 4:
+            if not list_indents:
+                if offset not in paragraph_lines and offset not in mdx_prose_lines:
+                    hide(chars, offset, offset + len(line))
+            elif after_blank and indent >= list_indents[-1][1] + 4:
+                list_code_indent = list_indents[-1][1] + 4
+                hide(chars, offset, offset + len(line))
+            after_blank = False
+        else:
+            if list_indents and indent < list_indents[0][1]:
+                list_indents.clear()
+            after_blank = False
+        offset += len(line)
+
+
+def mask_mdx_esm(text: str, chars: list[str]) -> None:
+    """Exclude whole top-level import/export declarations, including newlines.
+
+    This is a conservative JS lexical boundary scan rather than an MDX AST:
+    quoted strings, comments and balanced {}, [] and () cannot end a module
+    declaration. Once balanced, the declaration ends at its line boundary.
+    """
+    active = False
+    stack: list[str] = []
+    quote = ""
+    block_comment = False
+    offset = 0
+    lines = "".join(chars).splitlines(keepends=True)
+    for line_index, line in enumerate(lines):
+        if not active:
+            if not MODULE.match(line):
+                offset += len(line)
+                continue
+            active = True
+        hide(chars, offset, offset + len(line))
+        i = 0
+        while i < len(line):
+            char = line[i]
+            if block_comment:
+                if line.startswith("*/", i):
+                    block_comment = False
+                    i += 2
+                    continue
+            elif quote:
+                if char == "\\" and i + 1 < len(line):
+                    i += 2
+                    continue
+                if char == quote:
+                    quote = ""
+            elif line.startswith("//", i):
+                break
+            elif line.startswith("/*", i):
+                block_comment = True
+                i += 2
+                continue
+            elif char in ("'", '"', chr(96)):
+                quote = char
+            elif char == "/":
+                regex_end = skip_js_regex(line, i)
+                if regex_end is not None:
+                    i = regex_end
+                    continue
+            elif char in "([{":
+                stack.append({"(": ")", "[": "]", "{": "}"}[char])
+            elif char in ")]}" and stack and char == stack[-1]:
+                stack.pop()
+            i += 1
+        trimmed = line.rstrip()
+        continued = (trimmed.endswith(("=", "=>", ",", ".", "\\", "(", "[", "{"))
+                     or bool(re.search(r"\b(?:from|as|default)\s*$", trimmed)))
+        # 'import Widget\nfrom "./Widget.jsx"' and
+        # 'export { Widget }\nfrom "./Widget.jsx"' are valid module
+        # declarations. A balanced first line does not finish the statement
+        # when the next line supplies its from-clause.
+        if (not continued and line_index + 1 < len(lines)
+                and re.match(r"^[ \t]*from[ \t]+", lines[line_index + 1])
+                and re.match(r"^[ \t]*(?:import|export)\b", line)):
+            continued = True
+        if not stack and not quote and not block_comment and not continued:
+            active = False
+        offset += len(line)
+
+
+def mask_raw_elements_before_blocks(text: str, chars: list[str], is_mdx: bool = True) -> None:
+    """Hide raw HTML/JSX code and table containers before Markdown blocks.
+
+    A shadow view protects fenced code, inline code, comments and link targets
+    from being mistaken for raw element openers. All offsets remain unchanged.
+    """
+    view_chars = list("".join(chars))
+    mask_inline_link_targets(text, view_chars)
+    # Use the same list-aware fence rules as the main Markdown scanner.
+    # This shadow mask prevents a literal <pre> within fenced code from being
+    # mistaken for an opening raw element.
+    mask_fenced_blocks(text, view_chars, is_mdx)
+    # Markdown braces are ordinary prose. Only MDX treats them as JavaScript
+    # expressions and has top-level ESM declarations.
+    if is_mdx:
+        expr_pos = 0
+        shadow = "".join(view_chars)
+        while expr_pos < len(text):
+            if (shadow[expr_pos] == "{" and not is_markdown_escaped(shadow, expr_pos)):
+                close = end_brace(shadow, expr_pos)
+                if close > expr_pos and shadow[close - 1] == "}":
+                    hide(view_chars, expr_pos, close)
+                    expr_pos = close
+                    continue
+            expr_pos += 1
+        mask_mdx_esm(text, view_chars)
+    view = "".join(view_chars)
+    pos = 0
+    while pos < len(text):
+        if view[pos] == chr(96):
+            close = inline_code_end(view, pos)
+            if close is not None:
+                pos = close
+                continue
+        if view.startswith("<!--", pos) and not is_markdown_escaped(view, pos):
+            close = view.find("-->", pos + 4)
+            pos = len(view) if close < 0 else close + 3
+            continue
+        if view[pos] != "<" or is_markdown_escaped(view, pos):
+            pos += 1
+            continue
+        match = re.match(r"</?([A-Za-z][\w.:-]*)(?=[\s/>])", view[pos:])
+        if not match:
+            pos += 1
+            continue
+        tag = match.group(1)
+        end = end_tag(text, pos)
+        if (tag.lower() in RAW_ELEMENTS and not view.startswith("</", pos)
+                and not text[pos:end].rstrip().endswith("/>")):
+            close_end = find_matching_raw_close(text, end, tag, is_mdx=is_mdx)
+            stop = close_end if close_end is not None else len(text)
+            hide(chars, pos, stop)
+            pos = stop
+        else:
+            pos = end
+
+
+def inline_code_end(text: str, start: int) -> int | None:
+    """Return the end of a real code span with an exact-length backtick run."""
+    if (start >= len(text) or text[start] != chr(96)
+            or is_markdown_escaped(text, start)):
+        return None
+    opening = len(text[start:]) - len(text[start:].lstrip(chr(96)))
+    pos = start + opening
+    while (next_run := text.find(chr(96), pos)) >= 0:
+        count = len(text[next_run:]) - len(text[next_run:].lstrip(chr(96)))
+        if count == opening:
+            return next_run + count
+        pos = next_run + count
+    return None
+
+
+def html_comment_scan_view(raw: str, is_mdx: bool = True) -> str:
+    """Shield comment openers within inline code, MDX expressions and JSX tags.
+
+    Only the opener is shielded: a real HTML comment can still close at -->
+    even if its contents happen to include backticks or other markup.
+    """
+    chars = list(raw)
+    # A Markdown link's destination and optional title are metadata. A literal
+    # <!-- in either cannot open an HTML comment or consume later paragraphs.
+    for _, end, _, label_end, _ in markdown_inline_links(raw):
+        for match in re.finditer(r"<!--", raw[label_end:end]):
+            hide(chars, label_end + match.start(), label_end + match.end())
+    pos = 0
+    while pos < len(raw):
+        end = None
+        if raw[pos] == chr(96):
+            end = inline_code_end(raw, pos)
+        elif is_mdx and raw[pos] == "{" and not is_markdown_escaped(raw, pos):
+            end = end_brace(raw, pos)
+        elif raw[pos] == "<" and not raw.startswith("<!--", pos):
+            match = re.match(r"</?([A-Za-z][\w.:-]*)(?=[\s/>])", raw[pos:])
+            if match or raw.startswith(("<>", "</>"), pos):
+                end = end_tag(raw, pos)
+        if end is not None and end > pos:
+            for match in re.finditer(r"<!--", raw[pos:end]):
+                hide(chars, pos + match.start(), pos + match.end())
+            pos = end
+        else:
+            pos += 1
+    return "".join(chars)
+
+
+def mask_html_comments_in_line(
+    line: str, chars: list[str], offset: int, in_comment: bool
+) -> tuple[str, bool]:
+    """Mask HTML comments before Markdown block-state detection.
+
+    This helper is only called outside fenced code and block math. Keeping the
+    original length and newlines preserves all offsets for downstream masking.
+    """
+    masked = list(line)
+    pos = 0
+    while pos < len(line):
+        if in_comment:
+            start = pos
+        else:
+            start = line.find("<!--", pos)
+            # An escaped opener is visible Markdown text, not an HTML comment.
+            while start >= 0 and is_markdown_escaped(line, start):
+                start = line.find("<!--", start + 4)
+        if start < 0:
+            break
+        close = line.find("-->", start)
+        end = len(line) if close < 0 else close + 3
+        hide(chars, offset + start, offset + end)
+        for index in range(start, end):
+            if masked[index] != "\n":
+                masked[index] = " "
+        in_comment = close < 0
+        pos = end
+    return "".join(masked), in_comment
+
+
+def mask_markdown_line_prefixes(chars: list[str]) -> None:
+    """Remove nested quote, heading and list markers without losing words."""
+    offset = 0
+    for line in "".join(chars).splitlines(keepends=True):
+        visible, depth = _unquote_line(line)
+        prefix = len(line.rstrip("\r\n")) - len(visible) if depth else 0
+        if prefix:
+            hide(chars, offset, offset + prefix)
+        marker = re.match(
+            r"^ {0,6}(?:#{1,6}[ \t]+|[-*+][ \t]+|\d+[.)][ \t]+)",
+            visible
+        )
+        if marker:
+            hide(chars, offset + prefix, offset + prefix + marker.end())
+        offset += len(line)
+
+
+def prose_only(raw: str, *, is_mdx: bool = True) -> str:
+    # CommonMark tabs advance to the next four-column stop, including after
+    # list/blockquote markers. Expand before ALL lexical passes so offsets,
+    # code indents and nested list thresholds share the same column model.
+    text = body_without_frontmatter(raw).expandtabs(4)
+    chars = list(text)
+    # Before detecting raw HTML and ESM, exclude indented Markdown code.
+    # Otherwise an indented "<pre>" or incomplete "import {" can swallow
+    # the next reader-visible paragraph. Fenced code is masked before ESM.
+    paragraph_lines = ordinary_paragraph_continuations(text)
+    mdx_prose_lines = mdx_container_prose_lines(text) if is_mdx else set()
+    mask_indented_code_before_blocks(text, chars, paragraph_lines, mdx_prose_lines)
+    mask_raw_elements_before_blocks(text, chars, is_mdx)
+    mask_fenced_blocks(text, chars, is_mdx)
+    if is_mdx:
+        mask_mdx_esm(text, chars)
+    reference_labels = mask_reference_definitions(text, chars)
+    block_text = "".join(chars)
+    # The block scanner must see the original column positions: hiding
+    # inline code first would make visible text after a closing backtick
+    # look like indented code. Guard only actual math marker locations.
+    code_spans = markdown_code_spans(block_text)
+    code_index = 0
+    offset = 0
+    in_fence = None
+    in_math = None
+    list_indents: list[tuple[int, int]] = []
+    list_code_indent: int | None = None
+    after_blank = False
+    in_html_comment = False
+    in_footnote = False
+    comment_lines = iter(html_comment_scan_view(block_text, is_mdx).splitlines(keepends=True))
+
+    for original_line in block_text.splitlines(keepends=True):
+        # Shield inline code/MDX attributes when searching for HTML comments;
+        # preserve the original source for all subsequent Markdown work.
+        comment_line = next(comment_lines)
+        line = original_line
+        if not in_fence and not in_math:
+            scanned, in_html_comment = mask_html_comments_in_line(
+                comment_line, chars, offset, in_html_comment
+            )
+            if scanned != comment_line:
+                line = scanned
+        trimmed = line.lstrip()
+        indent = len(line) - len(trimmed)
+        visible, quote_depth = _unquote_line(line)
+        quote_indent = len(visible) - len(visible.lstrip(" "))
+        # Code inside a blockquote uses the indentation AFTER the > marker.
+        # Leave code-fence contents and mathematical blocks to their own
+        # state machines, without updating the surrounding list context.
+        # A list's indented code block continues over successive lines and
+        # blank lines until a nonblank line dedents below its code threshold.
+        list_code_line = False
+        if list_code_indent is not None:
+            if not trimmed.strip() or indent >= list_code_indent:
+                list_code_line = True
+                hide(chars, offset, offset + len(line))
+            else:
+                list_code_indent = None
+        if not in_fence and not in_math and not in_html_comment and not list_code_line:
+            footnote_marker = re.match(r"^ {0,3}\[\^[^\]\n]+\]:[ \t]*", line)
+            if footnote_marker:
+                in_footnote = True
+            elif trimmed.strip() and indent < 4:
+                in_footnote = False
+            list_marker = re.match(r"^( *)(?:[-*+]|\d+[.)])\s+", line)
+            if not trimmed.strip():
+                after_blank = bool(list_indents)
+            elif footnote_marker:
+                after_blank = False
+            elif in_footnote and indent >= 4 and indent < 8:
+                # A four-space continuation belongs to the visible footnote,
+                # not to an independent indented code block.
+                after_blank = False
+            elif list_marker:
+                if indent >= 4 and not list_indents and offset not in mdx_prose_lines:
+                    hide(chars, offset, offset + len(line))
+                else:
+                    while list_indents and list_indents[-1][0] >= indent:
+                        list_indents.pop()
+                    list_indents.append((indent, len(list_marker.group(0))))
+                after_blank = False
+            elif quote_depth and quote_indent >= 4:
+                if offset not in paragraph_lines and offset not in mdx_prose_lines:
+                    hide(chars, offset, offset + len(line))
+                after_blank = False
+            elif indent >= 4:
+                if not list_indents:
+                    if offset not in paragraph_lines and offset not in mdx_prose_lines:
+                        hide(chars, offset, offset + len(line))
+                elif after_blank and indent >= list_indents[-1][1] + 4:
+                    list_code_indent = list_indents[-1][1] + 4
+                    list_code_line = True
+                    hide(chars, offset, offset + len(line))
+                after_blank = False
+            else:
+                if list_indents and indent < list_indents[0][1]:
+                    list_indents.clear()
+                after_blank = False
+
+        fence_text, quote_depth = _fence_line(line, list_indents)
+        fence = FENCE.match(fence_text)
+        # Display math can live inside a blockquote or a list. Strip the
+        # container prefix before checking its opening/closing markers.
+        math_text = fence_text.lstrip()
+        math_list = re.match(r"^(?:[-*+]|\d+[.)])\s+", math_text)
+        if math_list:
+            math_text = math_text[math_list.end():]
+        code_math = False
+        if math_text.startswith((chr(36) * 2, r"\[")):
+            candidate = line.find(math_text)
+            if candidate >= 0:
+                marker_pos = offset + candidate
+                while code_index < len(code_spans) and code_spans[code_index][1] <= marker_pos:
+                    code_index += 1
+                code_math = (code_index < len(code_spans)
+                             and code_spans[code_index][0] < marker_pos
+                             and marker_pos < code_spans[code_index][1])
+        # The active block wins. A math delimiter inside fenced code is code,
+        # and a code fence inside a math block must not affect block state.
+        if in_fence and quote_depth < in_fence[2]:
+            in_fence = None
+        if in_fence:
+            hide(chars, offset, offset + len(line))
+            if (quote_depth == in_fence[2] and fence
+                    and fence.group(1)[0] == in_fence[0]
+                    and len(fence.group(1)) >= in_fence[1]
+                    and not fence_text[fence.end():].strip()):
+                in_fence = None
+        elif in_math:
+            hide(chars, offset, offset + len(line))
+            if quote_depth == in_math[1] and in_math[0] in math_text:
+                in_math = None
+        elif in_html_comment:
+            # A comment can contain fence or math delimiters on their own
+            # lines; neither may change parser state.
+            pass
+        elif list_code_line:
+            # Fences and math markers inside indented code are code, too.
+            hide(chars, offset, offset + len(line))
+        elif _valid_fence_opener(fence_text, fence):
+            marker = fence.group(1)
+            in_fence = (marker[0], len(marker), quote_depth)
+            hide(chars, offset, offset + len(line))
+        elif not code_math and math_text.startswith((chr(36) * 2, r"\[")):
+            hide(chars, offset, offset + len(line))
+            closing = chr(36) * 2 if math_text.startswith(chr(36) * 2) else r"\]"
+            if closing not in math_text[2:]:
+                in_math = (closing, quote_depth)
+        elif ((is_mdx and MODULE.match(line))
+              or re.match(r"^ {0,3}(?:::{1}|!{3})", line)
+              or re.match(r"^ {0,3}(?:-{3,}|\*{3,}|_{3,})\s*$", line)
+              or re.match(r"^\s*\|?\s*:?[-]{3,}:?\s*(?:\|.*)?$", line)):
+            hide(chars, offset, offset + len(line))
+        offset += len(line)
+
+    mask_gfm_tables(text, chars)
+    # Hide link targets before the HTML/MDX pass: a comment-looking title or
+    # expression inside a link must never be interpreted as real markup.
+    mask_inline_link_targets(text, chars)
+    # URI-autolinks are not HTML tags. Remove them before the HTML/JSX pass,
+    # which could otherwise misinterpret a scheme such as 'ftp:' as a tag.
+    mask_uri_autolinks(chars)
+
+    pos = 0
+    while pos < len(text):
+        if chars[pos] == " " and text[pos] != " ":
+            pos += 1
+            continue
+        if text.startswith("<!--", pos) and not is_markdown_escaped(text, pos):
+            end = text.find("-->", pos + 4)
+            end = len(text) if end < 0 else end + 3
+            hide(chars, pos, end)
+            pos = end
+            continue
+        if text[pos] == "<" and not is_markdown_escaped(text, pos):
+            match = re.match(r"</?([A-Za-z][\w.:-]*)(?=[\s/>])", text[pos:])
+            if match or text.startswith(("<>", "</>"), pos):
+                tagname = match.group(1) if match else ""
+                end = end_tag(text, pos)
+                closing = text.startswith("</", pos)
+                selfclosing = text[pos:end].rstrip().endswith("/>")
+                hide(chars, pos, end)
+                if tagname.lower() in RAW_ELEMENTS and not closing and not selfclosing:
+                    close_end = find_matching_raw_close(text, end, tagname, is_mdx=is_mdx)
+                    if close_end is not None:
+                        hide(chars, end, close_end)
+                        end = close_end
+                    elif tagname.lower() in TABLE_ELEMENTS:
+                        # Fail closed for malformed/unclosed table elements.
+                        hide(chars, end, len(text))
+                        end = len(text)
+                pos = end
+                continue
+        if is_mdx and text[pos] == "{" and not is_markdown_escaped(text, pos):
+            end = end_brace(text, pos)
+            hide(chars, pos, end)
+            pos = end
+            continue
+        if text[pos] == chr(96):
+            end = inline_code_end(text, pos)
+            if end is not None:
+                hide(chars, pos, end)
+                pos = end
+                continue
+        pos += 1
+
+    # Inline links/images were masked using balanced syntax before MDX parsing.
+    # Reference-style links and resolved shortcut-reference images are masked
+    # here; unknown ![literal] labels are left as reader-visible text.
+    mask_shortcut_reference_images(chars, reference_labels)
+    # Resolved reference links keep visible text and hide technical IDs.
+    # For images, even the alt text is excluded. Balanced nested labels
+    # are parsed using the same bracket matcher as inline links.
+    mask_full_reference_links(chars, reference_labels)
+    mask_bare_urls(chars)
+    mask_gfm_autolinks(chars)
+    mask_footnote_identifiers(chars)
+    mask_markdown_line_prefixes(chars)
+    mask_inline_paren_math(chars)
+
+    mask_inline_dollar_math(chars)
+    cleaned = "".join(chars)
+    cleaned = re.sub(r"(?m)^[ \t]*\|?[ \t]*:?-{3,}:?[ \t|:-]*$", "", cleaned)
+    cleaned = re.sub(r"[*_~|]", " ", cleaned)
+    return cleaned.strip() + "\n" if cleaned.strip() else ""
+
+
+def read_article(root: Path, relative: str) -> str:
+    target = (root / relative).resolve()
+    if not target.is_relative_to(root.resolve()) or language(relative) is None:
+        raise ValueError("Invalid content path")
+    return target.read_text(encoding="utf-8") if target.is_file() else ""
+
+
+def load_module(root: Path, module_path: str, module_name: str):
+    path = root / module_path
+    if not path.is_file():
+        raise RuntimeError("Humanizer module missing: " + str(path))
+    sys.path.insert(0, str(path.parent))
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("Cannot load " + str(path))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[module_name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def normalized(text: object) -> str:
+    # Compare the full excerpt: a changed ending beyond 180 characters is
+    # still a new editorial finding, not a duplicate of the old text.
+    return re.sub(r"\s+", " ", str(text or "")).casefold()
+
+
+def russian_new(module, base: str, head: str) -> list[dict]:
+    def run(s):
+        return module.run_review(s, style_id="neutral", evidence_ids=None, register="general").get("findings", []) if s else []
+    def signature(f):
+        return (f.get("library_id"), f.get("rule_id"), f.get("phenomenon_id"), f.get("verdict"), normalized(f.get("excerpt")))
+    counts = Counter(signature(f) for f in run(base))
+    out = []
+    for finding in run(head):
+        key = signature(finding)
+        if counts[key]:
+            counts[key] -= 1
+        else:
+            out.append(finding)
+    return out
+
+
+def serbian_all_evidence(module, finding, text: str) -> list[str]:
+    """Recover the complete evidence for each rule of the pinned Serbian seed.
+
+    The upstream checker intentionally caps its public evidence at five examples
+    while keeping the full count. Comparing only that preview misses replaced
+    sixth-and-later matches, so we use its very same compiled patterns on the
+    same input. Keep this adapter aligned with the pinned upstream revision.
+    """
+    if finding.rule_id == "sr_ai_negative_parallelism_density":
+        normalized_text = module.normalize_script(text)
+        pattern = module.NEGATIVE_PARALLELISM_RE
+        return [module._compact_ws(m.group(0)) for m in pattern.finditer(normalized_text)]
+    if finding.rule_id == "sr_ai_triplet_density":
+        normalized_text = module.normalize_script(text)
+        pattern = module.TRIPLET_RE
+        return [module._compact_ws(m.group(0)) for m in pattern.finditer(normalized_text)]
+    if finding.rule_id == "sr_ai_repeated_section_scaffold":
+        headings = [module._compact_ws(h) for h in module.HEADING_RE.findall(text)]
+        counts = Counter(module.normalize_script(h).casefold() for h in headings)
+        return [f"{heading} × {count}" for heading, count in counts.most_common() if count >= 3]
+    if finding.rule_id == "sr_ai_heading_fragmentation":
+        return [module._compact_ws(h) for h in module.HEADING_RE.findall(text)]
+    # Unknown future rules must not silently use a truncated five-item preview.
+    if finding.count > len(finding.evidence):
+        raise RuntimeError(f"Unrecognized Serbian Humanizer rule with truncated evidence: {finding.rule_id}")
+    return list(finding.evidence)
+
+
+def serbian_new(module, base: str, head: str) -> list[dict]:
+    """Subtract the complete multiset of matched evidence, not summary counts."""
+    if not head:
+        return []
+    before = {f.rule_id: f for f in module.review(base)} if base else {}
+    out = []
+    for finding in module.review(head):
+        previous = before.get(finding.rule_id)
+        old_evidence = serbian_all_evidence(module, previous, base) if previous else []
+        new_evidence = serbian_all_evidence(module, finding, head)
+        old_fragments = Counter(re.sub(r"\s+", " ", e).strip().casefold() for e in old_evidence)
+        new_fragments = []
+        for excerpt in new_evidence:
+            key = re.sub(r"\s+", " ", excerpt).strip().casefold()
+            if old_fragments[key]:
+                old_fragments[key] -= 1
+            else:
+                new_fragments.append(excerpt)
+        # Some rules report a count of affected instances rather than evidence
+        # strings; retain their aggregate increase as an additional signal.
+        extra_count = max(0, finding.count - (previous.count if previous else 0))
+        if not new_fragments and extra_count == 0:
+            continue
+        out.append({
+            "rule_id": finding.rule_id,
+            "category": finding.category,
+            "message": finding.message,
+            "count": max(len(new_fragments), extra_count),
+            "evidence": new_fragments,
+        })
+    return out
+
+
+def inline(value: object, limit: int = 230) -> str:
+    s = re.sub(r"\s+", " ", str(value or "")).strip().replace(chr(96), "'")
+    s = s.replace("<", "‹").replace(">", "›")
+    return s[: limit - 1] + "…" if len(s) > limit else s
+
+
+def limit_report_size(text: str, limit_bytes: int = 60000) -> str:
+    """Keep PR comments and Actions summaries within safe byte limits."""
+    if len(text.encode("utf-8")) <= limit_bytes:
+        return text
+    notice = "\n_Отчёт сокращён по ограничению размера; часть замечаний не показана._\n"
+    budget = limit_bytes - len(notice.encode("utf-8")) - 2
+    output: list[str] = []
+    used = 0
+    for line in text.splitlines(keepends=True):
+        size = len(line.encode("utf-8"))
+        if used + size > budget:
+            break
+        output.append(line)
+        used += size
+    return "".join(output).rstrip() + notice
+
+
+def report(paths: list[str | dict[str, str]], base_root: Path, head_root: Path,
+           ru_root: Path, sr_root: Path) -> str:
+    groups: dict[str, list[tuple[str, list[dict]]]] = {"ru": [], "sr": []}
+    ru = sr = None
+    for entry in paths:
+        # Keep the base identity for pure renames. If a file moves across
+        # languages, review it as a new article in the destination language.
+        file = entry if isinstance(entry, str) else entry["head"]
+        previous = file if isinstance(entry, str) else entry.get("base", file)
+        lang = language(file)
+        if lang is None:
+            continue
+        before = (prose_only(read_article(base_root, previous),
+                             is_mdx=previous.endswith(".mdx"))
+                  if language(previous) == lang else "")
+        after = prose_only(read_article(head_root, file),
+                           is_mdx=file.endswith(".mdx"))
+        if not after or after == before:
+            continue
+        if lang == "ru":
+            ru = ru or load_module(ru_root, "scripts/review.py", "svesnost_humanizer_ru")
+            findings = russian_new(ru, before, after)
+        else:
+            sr = sr or load_module(sr_root, "scripts/check.py", "svesnost_humanizer_sr")
+            findings = serbian_new(sr, before, after)
+        groups[lang].append((file, findings))
+
+    lines = [MARKER, "## Языковая редактура / Језичка редактура", "",
+             "Проверяется только проза статей; frontmatter, код и служебная разметка исключены.",
+             "Замечания не блокируют PR и не изменяют файлы автоматически.", ""]
+    titles = {"ru": "Русский — humanizer_russian", "sr": "Српски — humanizer_serbian"}
+    for lang in ("ru", "sr"):
+        lines += ["### " + titles[lang], ""]
+        if not groups[lang]:
+            lines += ["Нет изменённых статей для проверки / Нема измењених чланака.", ""]
+            continue
+        for file, findings in groups[lang]:
+            lines += ["**" + inline(file) + "**", ""]
+            if not findings:
+                lines += ["Новых замечаний нет / Нема нових напомена.", ""]
+                continue
+            for item in findings[:25]:
+                if lang == "ru":
+                    excerpt = inline(item.get("excerpt"))
+                    reason = inline(item.get("reason") or item.get("rule_id"))
+                    lines.append("- **" + excerpt + "** — " + reason)
+                else:
+                    evidence = ", ".join(inline(x, 100) for x in item.get("evidence", [])[:3])
+                    lines.append("- **" + inline(item.get("rule_id")) + "**: " +
+                                 inline(item.get("message")) +
+                                 ((" Примери: " + evidence) if evidence else ""))
+            if len(findings) > 25:
+                lines += ["", f"_Ещё {len(findings)-25} замечаний не показано._"]
+            lines.append("")
+    return limit_report_size("\n".join(lines).rstrip() + "\n")
+
+
+def self_test() -> dict:
+    article = """---
+title: УЖАСНОЕ НАЗВАНИЕ
+description: НЕ ПРОВЕРЯТЬ
+hero:
+  title: НЕ ПОПАДАТЬ
+---
+# Заголовок статьи
+
+Это обычный читательский текст со словами для проверки.[^1]
+
+[Ссылка на издание](https://hidden.example/irrelevant)
+
+<Aside title="СКРЫТАЯ РАЗМЕТКА" data={{ secret: "НЕЛЬЗЯ" }}>
+Параграф внутри компонента виден читателю.
+</Aside>
+
+""" + chr(96) * 3 + """javascript
+const priv = "КОД НЕ ПРОВЕРЯТЬ";
+""" + chr(96) * 3 + """
+
+<CodeBlock>Пример исходного кода НЕ ПРОВЕРЯТЬ</CodeBlock>
+
+Здесь {someFunction("СКРЫТАЯ ПЕРЕМЕННАЯ")} остаётся текст.
+
+[^1]: **Документ** — Примечание с читательским текстом.
+"""
+    result = prose_only(article)
+    allowed = ["Заголовок статьи", "обычный читательский текст", "Ссылка на издание",
+               "Параграф внутри компонента", "остаётся текст", "Примечание с читательским текстом"]
+    forbidden = ["УЖАСНОЕ", "НЕ ПРОВЕРЯТЬ", "НЕ ПОПАДАТЬ", "СКРЫТАЯ",
+                 "hidden.example", "javascript", "someFunction", "CodeBlock",
+                 "Aside", "data=", "secret:", "const priv", "title:", "[^1]"]
+    for value in allowed:
+        assert value in result, ("missing prose", value, result)
+    for value in forbidden:
+        assert value not in result, ("leaked markup", value, result)
+
+    # Markdown link destinations have nested parentheses and quoted titles.
+    # None of their technical fragments may enter Humanizer; labels and prose
+    # beside links remain reader-visible.
+    link_cases = (
+        ("[Текст](https://example.org/path_(foo)more) обычная проза.",
+         ("Текст", "обычная проза"), ("example.org", "foo", "more")),
+        ("См. https://example.org/path_(foo)more и далее.",
+         ("См.", "и далее"), ("example.org", "foo", "more")),
+        ('[Документ](https://example.org "подпись <!--")\nСледующий абзац.',
+         ("Документ", "Следующий абзац"), ("example.org", "подпись", "<!--")),
+        ('До [Файл](https://example.org/path_(foo)more "подпись <!-- (x)")'
+         ' после ссылки.\nСледующий абзац.',
+         ("До", "Файл", "после ссылки", "Следующий абзац"),
+         ("example.org", "foo", "more", "подпись", "<!--")),
+    )
+    for sample, visible, hidden in link_cases:
+        extracted = prose_only(sample)
+        for fragment in visible:
+            assert fragment in extracted, ("link lost prose", fragment, extracted)
+        for fragment in hidden:
+            assert fragment not in extracted, ("link leaked metadata", fragment, extracted)
+    # A backtick code span with ']' cannot end the outer link label.
+    code_label = 'До [Ссылка `] ` и текст](/private/path "СЛУЖЕБНЫЙ TITLE") после.'
+    code_label_prose = prose_only(code_label)
+    for visible in ("До", "Ссылка", "и текст", "после"):
+        assert visible in code_label_prose, (visible, code_label_prose)
+    for hidden in ("/private/path", "СЛУЖЕБНЫЙ TITLE"):
+        assert hidden not in code_label_prose, (hidden, code_label_prose)
+    assert len(markdown_inline_links(code_label)) == 1, markdown_inline_links(code_label)
+    # Nested brackets may be present *inside* a code span as well.
+    code_brackets = "См. [Текст `[not a label]` после](/private/code)."
+    assert "/private/code" not in prose_only(code_brackets)
+    # Unmatched code delimiters remain ordinary link-label characters.
+    assert "[Текст" in prose_only("Видимый [Текст ` без пары.")
+    # Very long valid data: images must not leak alt text or base64.
+    long_image = "Начало ![СЕКРЕТНЫЙ ALT](data:image/png;base64," + "A" * 8200 + ") конец."
+    long_prose = prose_only(long_image)
+    assert "Начало" in long_prose and "конец." in long_prose, long_prose
+    assert "СЕКРЕТНЫЙ ALT" not in long_prose and "data:image" not in long_prose
+    assert "A" * 100 not in long_prose, long_prose[:200]
+    assert len(markdown_inline_links(long_image)) == 1
+    # Parentheses inside an overlength destination must still balance.
+    nested_long_link = "См. [Документ](/private/(" + "b" * 8200 + ")/page) далее."
+    nested_long_prose = prose_only(nested_long_link)
+    assert "Документ" in nested_long_prose and "далее" in nested_long_prose
+    assert "/private/" not in nested_long_prose and "b" * 100 not in nested_long_prose
+    # Repeated malformed link openers must remain inexpensive.
+    unmatched_targets_with_closer = "[a](" * 10000 + ")"
+    assert len(markdown_inline_links(unmatched_targets_with_closer)) <= 1
+    img = prose_only("Вводный текст ![СЕКРЕТНЫЙ ALT](https://example.org/x_(y).png) конец.")
+    assert "Вводный текст" in img and "конец" in img, img
+    assert "СЕКРЕТНЫЙ" not in img and "example.org" not in img, img
+
+    # Clickable images are nested inside link labels; the image alt is still
+    # non-prose even though the outer link is reader-visible.
+    clickable_image = (
+        "Проза до изображения. "
+        "[![НЕ ПОСЫЛАТЬ ALT](https://example.org/image.png)]"
+        "(https://example.org/page) "
+        "Проза после изображения."
+    )
+    clickable_body = prose_only(clickable_image)
+    for allowed_text in ("Проза до изображения", "Проза после изображения"):
+        assert allowed_text in clickable_body, (allowed_text, clickable_body)
+    for hidden_text in ("НЕ ПОСЫЛАТЬ ALT", "example.org", "image.png"):
+        assert hidden_text not in clickable_body, (hidden_text, clickable_body)
+    assert len(markdown_inline_links("[![alt](src)](href)")) == 2
+
+    # CommonMark allows a link title to begin on the next line. The
+    # destination and title remain metadata, while the label is visible.
+    for title in ('СЕКРЕТНОЕ TITLE', 'СЕКРЕТНОЕ TITLE <!--'):
+        multiline_link = (
+            "До [Документ](/materials/page\n"
+            + '  "' + title + '") после.\n'
+            + "Следующий абзац.\n"
+        )
+        extracted = prose_only(multiline_link)
+        for visible in ("До", "Документ", "после", "Следующий абзац"):
+            assert visible in extracted, ("multiline link lost prose", visible, extracted)
+        for hidden in ("/materials/page", "СЕКРЕТНОЕ TITLE", "<!--"):
+            assert hidden not in extracted, ("multiline link metadata leaked", hidden, extracted)
+
+    # A soft line break is also allowed BEFORE the link destination and
+    # between a complete destination and the closing parenthesis.
+    for sample in (
+        "До [Документ](/private/path\n) после.\nСледующий абзац.",
+        "До [Документ](\n/private/path) после.\nСледующий абзац.",
+        'До [Документ](\n/private/path\n "СЛУЖЕБНЫЙ TITLE") после.',
+    ):
+        found = markdown_inline_links(sample)
+        assert len(found) == 1, ("valid multiline destination not parsed", sample, found)
+        extracted = prose_only(sample)
+        for fragment in ("До", "Документ", "после"):
+            assert fragment in extracted, ("multiline destination lost prose", sample, extracted)
+        for hidden in ("/private/path", "СЛУЖЕБНЫЙ TITLE"):
+            assert hidden not in extracted, ("multiline destination leaked", sample, extracted)
+    assert not markdown_inline_links("См. [Документ](/private/\npath) далее.")
+    assert not markdown_inline_links("См. [Документ](\n\n/private/path) далее.")
+
+    # CommonMark link text can span soft line breaks. The label remains
+    # reader-visible but a relative target and title do not enter Humanizer.
+    soft_break_link = (
+        'См. [Нужный\nдокумент](/private/path "СЛУЖЕБНЫЙ TITLE") далее.\n'
+        "Следующий читательский абзац.\n"
+    )
+    soft_link_prose = prose_only(soft_break_link)
+    for fragment in ("См.", "Нужный", "документ", "далее", "Следующий читательский абзац"):
+        assert fragment in soft_link_prose, ("multiline label lost prose", fragment, soft_link_prose)
+    for hidden in ("/private/path", "СЛУЖЕБНЫЙ TITLE"):
+        assert hidden not in soft_link_prose, ("multiline label leaked metadata", hidden, soft_link_prose)
+    assert len(markdown_inline_links(soft_break_link)) == 1
+
+    # Unclosed link destinations must not repeatedly rescan the remaining
+    # input. Bracket matching alone does not cover '[a](' repetitions.
+    unfinished_targets = "[a](" * 10000
+    assert markdown_inline_links(unfinished_targets) == []
+    with_later_link = unfinished_targets + " Далее [Документ](/page)."
+    found_links = markdown_inline_links(with_later_link)
+    assert len(found_links) == 1, ("malformed targets hid a real link", found_links)
+    assert "Документ" in prose_only(with_later_link)
+    assert "/page" not in prose_only(with_later_link)
+
+    # Many unclosed angle destinations must be rejected without rescanning
+    # their common suffix; a valid later link still has to be found.
+    malformed_angles = "[текст](<" * 4000 + ")"
+    assert markdown_inline_links(malformed_angles) == []
+    angle_with_link = malformed_angles + " См. [Документ](<private/path>) далее."
+    assert len(markdown_inline_links(angle_with_link)) == 1
+    angle_after = prose_only(angle_with_link)
+    assert "Документ" in angle_after and "далее" in angle_after, angle_after
+    assert "private/path" not in angle_after, angle_after
+    # An escaped '<' inside an angle destination does not invalidate it.
+    assert len(markdown_inline_links(r"[Документ](<a\<b>)")) == 1
+
+    # CommonMark URI autolinks use any valid scheme, not just http(s).
+    uri_autolinks = (
+        "Контакт <mailto:editor@example.org> для связи.\n"
+        "Файлы <ftp://files.example.org/path> доступны здесь.\n"
+        "Другой <custom+v1:private/resource> пример.\n"
+        "\n"
+        "Дальнейший читательский абзац.\n"
+    )
+    uri_body = prose_only(uri_autolinks)
+    for wanted in ("Контакт", "для связи", "Файлы", "доступны здесь",
+                   "Другой", "пример", "Дальнейший читательский абзац"):
+        assert wanted in uri_body, ("autolink swallowed prose", wanted, uri_body)
+    for metadata in ("editor@example.org", "files.example.org/path",
+                     "custom+v1:private/resource", "mailto:", "ftp:"):
+        assert metadata not in uri_body, ("autolink leaked metadata", metadata, uri_body)
+    escaped_uri = "\\<mailto:visible@example.org> — видимый литерал."
+    escaped_body = prose_only(escaped_uri)
+    assert "mailto:visible@example.org" in escaped_body, escaped_body
+    assert "видимый литерал" in escaped_body, escaped_body
+    hidden_in_code = (
+        "До кода " + chr(96) + "<mailto:hidden@example.org>" + chr(96)
+        + " после кода.\n"
+        + "~~~md\n<ftp://internal.example.org/data>\n~~~\n"
+        + "Обычный читательский абзац.\n"
+    )
+    code_body = prose_only(hidden_in_code)
+    assert "hidden@example.org" not in code_body, code_body
+    assert "internal.example.org" not in code_body, code_body
+    assert "Обычный читательский абзац" in code_body, code_body
+
+    # Email autolinks have no URI scheme and are not HTML elements.
+    # The escaped opener is literal text; a double backslash is not escaped.
+    email_autolinks = (
+        "Контакт <editor@example.org> для связи.\n"
+        "Почта <name+tag@sub.example.co.uk> для сообщений.\n"
+        "\n"
+        "Видимый следующий абзац.\n"
+    )
+    email_body = prose_only(email_autolinks)
+    for visible in ("Контакт", "для связи", "Почта",
+                    "для сообщений", "Видимый следующий абзац"):
+        assert visible in email_body, (visible, email_body)
+    for secret in ("editor@example.org", "name+tag@sub.example.co.uk"):
+        assert secret not in email_body, (secret, email_body)
+    escaped_email = "\\<visible@example.org> и читательская проза.\n"
+    escaped_email_body = prose_only(escaped_email)
+    assert "visible@example.org" in escaped_email_body, escaped_email_body
+    assert "читательская проза" in escaped_email_body, escaped_email_body
+    even_email_escapes = "\\\\<hidden@example.org> после.\n"
+    assert "hidden@example.org" not in prose_only(even_email_escapes)
+    email_inside_code = (
+        "Читатель " + chr(96) + "<inner@example.org>" + chr(96)
+        + " продолжает текст.\n"
+        "~~~md\n<code@example.org>\n~~~\n"
+        "После примера.\n"
+    )
+    email_code_prose = prose_only(email_inside_code)
+    for secret in ("inner@example.org", "code@example.org"):
+        assert secret not in email_code_prose, (secret, email_code_prose)
+    assert "После примера." in email_code_prose, email_code_prose
+
+    # An angle-bracket link destination may contain a literal unmatched ).
+    # The complete destination including the technical tail must be hidden.
+    for angle_link in (
+        "До [Документ](<b)c>) после.",
+        "До [Материал](<path_(foo)more>) после.",
+    ):
+        angle_prose = prose_only(angle_link)
+        assert "До" in angle_prose and "после" in angle_prose, angle_prose
+        assert "b)c>" not in angle_prose and "foo)more" not in angle_prose, angle_prose
+        assert "<" not in angle_prose and ">" not in angle_prose, angle_prose
+    assert "Документ" in prose_only("До [Документ](<b)c>) после.")
+    assert "Материал" in prose_only("До [Материал](<path_(foo)more>) после.")
+
+    # Malformed CommonMark must remain visible: whitespace after a bare
+    # destination requires an explicit quoted/parenthesized title.
+    malformed_link = "Видимый [пример](/служебный/путь СЛОВА ДЛЯ РЕДАКТУРЫ) после."
+    malformed_result = prose_only(malformed_link)
+    assert "СЛОВА ДЛЯ РЕДАКТУРЫ" in malformed_result, malformed_result
+    assert "пример" in malformed_result and "после" in malformed_result, malformed_result
+    assert not markdown_inline_links(malformed_link)
+    assert "СЛОВА ДЛЯ РЕДАКТУРЫ" not in prose_only(
+        'Видимый [пример](/служебный/путь "СЛОВА ДЛЯ РЕДАКТУРЫ") после.'
+    )
+
+    # An escaped Markdown literal \\( is not a TeX opener. It must not pair
+    # with the closing delimiter of a later, real inline formula.
+    quoted_tex = r"До \\( буквально. Важная проза после литерала. \(x+1\) Конец."
+    quoted_tex_body = prose_only(quoted_tex)
+    for fragment in ("До", "буквально", "Важная проза после литерала", "Конец"):
+        assert fragment in quoted_tex_body, ("literal ate prose", fragment, quoted_tex_body)
+    assert "x+1" not in quoted_tex_body, quoted_tex_body
+    assert "После" in prose_only(r"После \\( литерала без формулы.")
+
+    assert language(DOCS + "ru/story.md") == "ru"
+    assert language(DOCS + "en/story.md") is None
+    assert language(DOCS + "story.mdx") == "sr"
+    assert language("docs/story.md") is None
+    assert prose_only("---\ntitle: private\n") == ""
+
+    # Multi-line MDX ESM declarations are not Markdown prose. Their nested
+    # object keys and import specifiers must be hidden through the closing
+    # brace/semicolon; ordinary paragraphs after them remain visible.
+    mdx_modules = (
+        "Проза перед экспортом.\n"
+        "export const meta = {\n"
+        '  title: "СЛУЖЕБНОЕ ПОЛЕ",\n'
+        "  nested: { label: 'СЕКРЕТ ЭКСПОРТА' },\n"
+        "};\n"
+        "\n"
+        "Видимый абзац после экспорта.\n"
+        "import {\n"
+        "  identifier as СЕКРЕТ_ИМПОРТА,\n"
+        "} from './module.js';\n"
+        "Обычный текст после импорта.\n"
+    )
+    modules_body = prose_only(mdx_modules)
+    for visible_text in ("Проза перед экспортом", "Видимый абзац после экспорта",
+                         "Обычный текст после импорта"):
+        assert visible_text in modules_body, ("ESM swallowed prose", visible_text, modules_body)
+    for hidden_text in ("СЛУЖЕБНОЕ ПОЛЕ", "СЕКРЕТ ЭКСПОРТА",
+                        "СЕКРЕТ_ИМПОРТА", "module.js"):
+        assert hidden_text not in modules_body, ("ESM leaked into prose", hidden_text, modules_body)
+
+    # ESM 'from' is allowed on its own line after a balanced import/export.
+    # The next reader-visible Markdown paragraph must not be consumed.
+    for statement in (
+        "import Widget\nfrom './Widget.jsx'\n",
+        "export { Widget }\nfrom './Widget.jsx'\n",
+    ):
+        snippet = statement + "\nВидимая проза после импорта.\n"
+        extracted = prose_only(snippet)
+        assert "Видимая проза после импорта." in extracted, extracted
+        for metadata in ("Widget", "from", ".jsx", "export", "import"):
+            assert metadata not in extracted, ("split ESM leaked", metadata, extracted)
+
+    # An incomplete import in standalone/list-indented Markdown code cannot
+    # start module state and consume the paragraph after that code block.
+    for indented_source, visible_after in (
+        ("    import {\nВидимый читательский абзац.\n",
+         "Видимый читательский абзац."),
+        ("- Видимый пункт\n\n      import {\n"
+         "      СЕКРЕТ В INDENTED CODE\n"
+         "После списка видимая проза.\n",
+         "После списка видимая проза."),
+    ):
+        indented_prose = prose_only(indented_source)
+        assert visible_after in indented_prose, ("indented ESM swallowed prose", indented_prose)
+        assert "import" not in indented_prose, indented_prose
+        assert "СЕКРЕТ В INDENTED CODE" not in indented_prose, indented_prose
+
+    # An unbalanced ESM-looking statement inside a fenced JS example must
+    # not start top-level module handling or hide the paragraph after ~~~.
+    fenced_esm = (
+        "Проза до примера.\n"
+        "~~~js\n"
+        "import {\n"
+        "~~~\n"
+        "Видимый абзац после примера.\n"
+    )
+    fenced_esm_prose = prose_only(fenced_esm)
+    assert "Проза до примера" in fenced_esm_prose, fenced_esm_prose
+    assert "Видимый абзац после примера" in fenced_esm_prose, fenced_esm_prose
+    assert "import" not in fenced_esm_prose, fenced_esm_prose
+    quoted_esm = (
+        "> ~~~js\n"
+        "> export const config = {\n"
+        "> ~~~\n"
+        "Видимый текст после цитаты.\n"
+    )
+    assert "Видимый текст после цитаты" in prose_only(quoted_esm)
+
+    # Indented YAML block scalar delimiters are data, not closing frontmatter.
+    # Only a column-zero delimiter ends the metadata section.
+    for closing in ("---", "..."):
+        yaml_scalar = (
+            "---\n"
+            "description: |\n"
+            "  ---\n"
+            "  ...\n"
+            "  СЛУЖЕБНАЯ ПРОЗА МЕТАДАННЫХ\n"
+            + closing + "   \n"
+            "# Видимый заголовок\n"
+            "Следующий абзац.\n"
+        )
+        extracted = prose_only(yaml_scalar)
+        assert "СЛУЖЕБНАЯ ПРОЗА МЕТАДАННЫХ" not in extracted, extracted
+        assert "Видимый заголовок" in extracted, extracted
+        assert "Следующий абзац." in extracted, extracted
+
+    special = "Проза до формулы.\n---\n:::note\nСодержимое примечания — это проза.\n:::\n@MATH@\nx^2 + 1\n@MATH@\nИ проза после.\n".replace("@MATH@", chr(36) * 2).replace("@MATH@", chr(36) * 2)
+    isolated = prose_only(special)
+    assert "Проза до формулы." in isolated and "Содержимое примечания" in isolated
+    assert "И проза после." in isolated and "x^2" not in isolated
+    assert "---" not in isolated and ":::note" not in isolated and chr(36) * 2 not in isolated
+
+    # Display math within quoted/list containers is code-like math, not
+    # reader-visible text; the next paragraph must survive closing markers.
+    math_samples = (
+        ("> " + chr(36) * 2 + "\n> E=mc^2\n> " + chr(36) * 2
+         + "\n> Видимый абзац.\n", "Видимый абзац"),
+        ("> \\[\n> x^2+y^2\n> \\]\n> Проза цитаты.\n",
+         "Проза цитаты"),
+        ("- Видимый пункт\n  " + chr(36) * 2 + "\n  x^2+y^2\n  "
+         + chr(36) * 2 + "\nПосле списка.\n", "После списка"),
+        ("- " + chr(36) * 2 + "\n  E=mc^2\n  " + chr(36) * 2
+         + "\nПосле формулы.\n", "После формулы"),
+    )
+    for sample, visible in math_samples:
+        extracted = prose_only(sample)
+        assert visible in extracted, ("display math swallowed prose", sample, extracted)
+        assert "E=mc^2" not in extracted and "x^2+y^2" not in extracted, (
+            "display math leaked", sample, extracted
+        )
+
+    # Fenced code is authoritative: math-looking lines inside must not open math
+    # blocks that swallow the paragraph after the closing code fence.
+    marker = chr(96) * 3
+    for math_start in (chr(36) * 2 + " не закрыто", r"\[ не закрыто"):
+        fenced = (
+            "Обычный текст перед кодом.\n" + marker + "text\n"
+            + math_start + "\n" + marker + "\n"
+            + "Обычный текст после кода.\n"
+        )
+        after_fence = prose_only(fenced)
+        assert "Обычный текст перед кодом." in after_fence, after_fence
+        assert "Обычный текст после кода." in after_fence, after_fence
+        assert "не закрыто" not in after_fence, after_fence
+
+    # Fenced code inside blockquotes (including nested quotes) and Markdown
+    # list items must be hidden as code, with following prose still visible.
+    nested_fences = (
+        ("> ~~~js\n> const secret = 'КОД В ЦИТАТЕ';\n> ~~~\n"
+         "Обычная проза после цитаты.\n", "Обычная проза после цитаты"),
+        ("> > ~~~js\n> > const secret = 'КОД ВО ВЛОЖЕННОЙ ЦИТАТЕ';\n"
+         "> > ~~~\nОбычная проза после вложенной цитаты.\n",
+         "Обычная проза после вложенной цитаты"),
+        ("- Видимый пункт списка\n    ~~~js\n    const secret = 'КОД В СПИСКЕ';\n"
+         "    ~~~\nОбычная проза после списка.\n", "Обычная проза после списка"),
+    )
+    for sample, expected_prose in nested_fences:
+        extracted = prose_only(sample)
+        assert expected_prose in extracted, ("prose lost after nested fence", extracted)
+        assert "const secret" not in extracted and "КОД В" not in extracted, extracted
+    assert "Видимый пункт списка" in prose_only(nested_fences[2][0])
+
+    # A list marker inside a fenced block must not mutate the enclosing list:
+    # otherwise the closing fence can be mistaken for indented prose.
+    list_markers_inside_code = (
+        "- Видимый пункт\n"
+        "    ~~~\n"
+        "    - КОД В СПИСКЕ\n"
+        "    ~~~\n"
+        "После списка.\n"
+    )
+    extracted = prose_only(list_markers_inside_code)
+    assert "Видимый пункт" in extracted and "После списка." in extracted, extracted
+    assert "КОД В СПИСКЕ" not in extracted, extracted
+
+    # HTML comment contents are not Markdown block syntax. An embedded fence
+    # or math opener must not consume the text after the comment closes.
+    for fake_delimiter in ("~~~", chr(36) * 2, r"\["):
+        comment = (
+            "Проза до комментария.\n"
+            "<!--\n" + fake_delimiter + "\n-->\n"
+            "Проза после комментария.\n"
+        )
+        extracted = prose_only(comment)
+        assert "Проза до комментария." in extracted, extracted
+        assert "Проза после комментария." in extracted, extracted
+        assert fake_delimiter not in extracted, extracted
+    # HTML-style syntax *inside code* must not start a real comment either.
+    in_code = (
+        "Проза до блока.\n" + chr(96) * 3 + "html\n"
+        "<!--\n" + chr(96) * 3 + "\n"
+        "Проза после блока.\n"
+    )
+    extracted = prose_only(in_code)
+    assert "Проза после блока." in extracted, extracted
+
+    # Raw MDX/HTML code containers must be hidden before the Markdown block
+    # scanner: internal ~~~ and $ cannot hide following reader-visible prose.
+    raw_blocks = (
+        ("pre", "~~~", "СЕКРЕТ В PRE"),
+        ("pre", "$", "СЕКРЕТ МАТЕМАТИКИ В PRE"),
+        ("CodeBlock", "~~~js", "СЕКРЕТ В CODEBLOCK"),
+        ("CodeBlock", "$", "СЕКРЕТ В CODEBLOCK MATH"),
+    )
+    for tag, marker_line, secret in raw_blocks:
+        sample = (
+            "Проза перед raw-блоком.\n"
+            f"<{tag}>\n"
+            + marker_line + "\n"
+            + secret + "\n"
+            + f"</{tag}>\n"
+            + "Обычный читательский абзац после блока.\n"
+        )
+        extracted = prose_only(sample)
+        for wanted in ("Проза перед raw-блоком", "Обычный читательский абзац после блока"):
+            assert wanted in extracted, ("raw block swallowed prose", tag, extracted)
+        assert secret not in extracted, ("raw code leaked", tag, extracted)
+    # A literal raw-looking tag inside fenced code is not an opening MDX tag.
+    fenced_raw_literal = (
+        "Текст до кода.\n"
+        "~~~html\n"
+        "<pre>\n"
+        "~~~\n"
+        "Текст после кода.\n"
+    )
+    assert "Текст после кода." in prose_only(fenced_raw_literal)
+
+    # The raw-element pre-scanner must also recognize a fence indented under
+    # a Markdown list: <pre> is code text, not a real opening container.
+    nested_fenced_raw = (
+        "- Видимый пункт\n"
+        "    ~~~html\n"
+        "    <pre>\n"
+        "    ~~~\n"
+        "Обычный абзац после списка.\n"
+    )
+    nested_fenced_raw_prose = prose_only(nested_fenced_raw)
+    assert "Видимый пункт" in nested_fenced_raw_prose, nested_fenced_raw_prose
+    assert "Обычный абзац после списка" in nested_fenced_raw_prose, nested_fenced_raw_prose
+
+    # The outer HTML/MDX table remains hidden even after an inner </table>.
+    nested_table = (
+        "Проза до вложенной таблицы.\n"
+        "<table><tr><td>\n"
+        "  <table><tr><td>ВНУТРЕННИЕ ДАННЫЕ</td></tr></table>\n"
+        "  СЕКРЕТ ВНЕ ВНУТРЕННЕЙ ТАБЛИЦЫ\n"
+        "</td></tr></table>\n"
+        "Видимый абзац после таблицы.\n"
+    )
+    nested_table_result = prose_only(nested_table)
+    for expected in ("Проза до вложенной таблицы", "Видимый абзац после таблицы"):
+        assert expected in nested_table_result, (expected, nested_table_result)
+    for hidden in ("ВНУТРЕННИЕ ДАННЫЕ", "СЕКРЕТ ВНЕ ВНУТРЕННЕЙ ТАБЛИЦЫ"):
+        assert hidden not in nested_table_result, (hidden, nested_table_result)
+
+    # A raw-looking tag in standalone Markdown code is not a raw element.
+    # The later non-indented prose must remain visible.
+    for code_tag in ("pre", "table", "CodeBlock"):
+        standalone_code = (
+            f"    <{code_tag}>\n"
+            "Обычный читательский абзац после примера.\n"
+        )
+        extracted = prose_only(standalone_code)
+        assert "Обычный читательский абзац после примера." in extracted, (
+            "indented raw tag swallowed prose", code_tag, extracted
+        )
+
+    # An escaped HTML tag is visible text, including a literal <table>.
+    for escape_prefix in ("\\", "\\\\\\"):
+        literal_tag = (
+            "Буквально " + escape_prefix + "<table> означает имя тега.\n"
+            "Видимый абзац после литерала.\n"
+        )
+        extracted = prose_only(literal_tag)
+        assert "означает имя тега" in extracted, extracted
+        assert "Видимый абзац после литерала" in extracted, extracted
+
+    # A closing table tag inside an HTML comment does not terminate the
+    # outer table; contents after the comment remain hidden as table data.
+    table_with_comment = (
+        "Проза перед таблицей.\n"
+        "<table><tr><td>\n"
+        "<!-- </table> -->\n"
+        "СЕКРЕТ ВНУТРИ ЯЧЕЙКИ\n"
+        "</td></tr></table>\n"
+        "Видимый абзац после таблицы.\n"
+    )
+    extracted = prose_only(table_with_comment)
+    assert "Проза перед таблицей" in extracted, extracted
+    assert "Видимый абзац после таблицы" in extracted, extracted
+    assert "СЕКРЕТ ВНУТРИ ЯЧЕЙКИ" not in extracted, extracted
+
+    # JSX expressions containing raw-looking tag strings must not change
+    # the nesting depth of the actual pre/table container.
+    inline_jsx_pre = "<pre>{'<pre>'}</pre>\nВидимый абзац после примера.\n"
+    pre_prose = prose_only(inline_jsx_pre)
+    assert "Видимый абзац после примера" in pre_prose, pre_prose
+    inline_jsx_table = (
+        "<table><tr><td>{'</table>'}СЕКРЕТ_В_ЯЧЕЙКЕ</td></tr></table>\n"
+        "Видимый абзац после таблицы.\n"
+    )
+    table_prose = prose_only(inline_jsx_table)
+    assert "СЕКРЕТ_В_ЯЧЕЙКЕ" not in table_prose, table_prose
+    assert "Видимый абзац после таблицы" in table_prose, table_prose
+
+    # Escaped Markdown delimiters remain readable: neither \{ nor \<!--
+    # may start an MDX expression or HTML comment that eats later paragraphs.
+    literal_delimiters = (
+        r"Буквальная \{ скобка." + "\n" + "Следующий абзац.",
+        r"Пишите \<!-- буквально." + "\n" + "Следующий абзац.",
+        r"Буквальная \\\{ скобка." + "\n" + "Следующий абзац.",
+        r"Пишите \\\<!-- буквально." + "\n" + "Следующий абзац.",
+    )
+    for sample in literal_delimiters:
+        extracted = prose_only(sample)
+        assert "Следующий абзац." in extracted, ("escaped delimiter consumed prose", sample, extracted)
+        assert "Буквальная" in extracted or "Пишите" in extracted, extracted
+    assert "Литерал перед выражением" in prose_only(
+        r"Литерал перед выражением \{ и затем {handler('SECRET')} остаётся видимым."
+    )
+    assert "SECRET" not in prose_only(
+        r"Литерал перед выражением \{ и затем {handler('SECRET')} остаётся видимым."
+    )
+
+    # JavaScript literals in MDX expressions/ESM are not raw HTML tags.
+    # Unclosed pseudo-tags must never consume the following article paragraph.
+    mdx_raw_literals = (
+        '{ "<table>" }\nВидимый абзац после выражения.\n',
+        'export const value = "<pre>";\nВидимый абзац после экспорта.\n',
+        'export const metadata = {\n'
+        '  title: "<table>",\n'
+        '};\n'
+        'Видимый абзац после объекта.\n',
+    )
+    for sample, visible in zip(
+        mdx_raw_literals,
+        ("Видимый абзац после выражения",
+         "Видимый абзац после экспорта",
+         "Видимый абзац после объекта")
+    ):
+        extracted = prose_only(sample)
+        assert visible in extracted, ("JS pseudo-tag ate prose", sample, extracted)
+        assert "<table>" not in extracted and "<pre>" not in extracted, extracted
+
+    # Curly braces inside JS regex character classes are not MDX delimiters.
+    for expression in (
+        r"/[{]/.test('x') ? 'да' : 'нет'",
+        r"/[}]/.test('x') ? 'да' : 'нет'",
+    ):
+        sample = "До {" + expression + "} после выражения.\nСледующий читательский абзац."
+        extracted = prose_only(sample)
+        for visible in ("До", "после выражения", "Следующий читательский абзац"):
+            assert visible in extracted, ("regex swallowed reader prose", expression, extracted)
+        for hidden in ("test(", "'да'", "'нет'"):
+            assert hidden not in extracted, ("regex leaked JS", expression, extracted)
+    assert "Деление рядом" in prose_only("Деление рядом {12 / 3} и затем проза.")
+
+    # The literal <!-- inside inline code, an MDX attribute or a JS expression
+    # cannot open an HTML comment and consume following reader-visible text.
+    fake_openers = (
+        "До " + chr(96) + "<!--" + chr(96)
+        + " и видимая проза.\nСледующий абзац.\n",
+        '<Aside title="<!--">Видимый текст компонента.</Aside>\nСледующий абзац.\n',
+        'Проза с {flag === "<!--" ? "да" : "нет"} рядом.\nСледующий абзац.\n',
+    )
+    for sample in fake_openers:
+        extracted = prose_only(sample)
+        assert "Следующий абзац." in extracted, ("comment opener escaped", extracted)
+    assert "видимая проза" in prose_only(fake_openers[0])
+    assert "Видимый текст компонента" in prose_only(fake_openers[1])
+    assert "Проза с" in prose_only(fake_openers[2])
+
+    # Indented code in Markdown blockquotes is code even though the original
+    # line begins with '>' instead of four spaces.
+    for quoted_code in (
+        ">     КОД В ЦИТАТЕ\n> Видимый текст.\n",
+        "> >     КОД ВО ВЛОЖЕННОЙ ЦИТАТЕ\n> > Видимый текст.\n",
+    ):
+        extracted = prose_only(quoted_code)
+        assert "КОД В" not in extracted, extracted
+        assert "Видимый текст." in extracted, extracted
+
+    # Four spaces inside a quote can continue an existing paragraph; the
+    # same indentation starts code after a blank line.
+    quote_continuation = (
+        "> Первый абзац\n"
+        ">     Продолжение того же абзаца\n"
+        ">\n"
+        ">     СЕКРЕТНЫЙ КОД ПОСЛЕ ПУСТОЙ\n"
+        ">\n"
+        "> Следующий видимый текст.\n"
+    )
+    quoted_body = prose_only(quote_continuation)
+    for visible in ("Первый абзац", "Продолжение того же абзаца",
+                    "Следующий видимый текст."):
+        assert visible in quoted_body, (visible, quoted_body)
+    assert "СЕКРЕТНЫЙ КОД ПОСЛЕ ПУСТОЙ" not in quoted_body, quoted_body
+    # List item content indentation is measured after the quote marker.
+    quoted_list = "> 100. Пункт списка\n>      Продолжение длинного пункта\n"
+    quoted_list_body = prose_only(quoted_list)
+    assert "Пункт списка" in quoted_list_body, quoted_list_body
+    assert "Продолжение длинного пункта" in quoted_list_body, quoted_list_body
+
+    # Reference-style Markdown links: keep reader-visible label only.
+    reference = (
+        "Читайте [проверенную публикацию][source] и [документ][].\n"
+        "Не показывать ![изображение][cover].\n"
+        "\n"
+        "[source]: https://example.org/secret\n"
+        "[cover]: https://example.org/image.png\n"
+        "[документ]: /document.pdf\n"
+    )
+    reference_body = prose_only(reference)
+    assert "проверенную публикацию" in reference_body, reference_body
+    assert "документ" in reference_body, reference_body
+    for hidden in ("[source]", "[cover]", "изображение", "example.org", "[]"):
+        assert hidden not in reference_body, (hidden, reference_body)
+    # A full reference link or image without a matching definition is
+    # ordinary visible text, including its unresolved identifier.
+    unresolved_ref = "Вот ![Видимые слова][missing] и [другие слова][missing]."
+    unresolved_prose = prose_only(unresolved_ref)
+    for expected in ("Видимые слова", "другие слова", "[missing]"):
+        assert expected in unresolved_prose, (expected, unresolved_prose)
+
+    # Full references with balanced nested link labels must hide the
+    # technical ID without dropping visible label text.
+    nested_reference = (
+        "См. [Текст [в скобках]][ref] и [ещё `] ` текст][ref].\n\n"
+        "[ref]: /private/path\n"
+    )
+    nested_reference_prose = prose_only(nested_reference)
+    for value in ("Текст [в скобках]", "ещё", "текст"):
+        assert value in nested_reference_prose, (value, nested_reference_prose)
+    for hidden in ("[ref]", "/private/path"):
+        assert hidden not in nested_reference_prose, (hidden, nested_reference_prose)
+    nested_image = (
+        "Начало ![СЕКРЕТНЫЙ [ALT]][cover] конец.\n\n"
+        "[cover]: /private/image.png\n"
+    )
+    nested_image_prose = prose_only(nested_image)
+    assert "Начало" in nested_image_prose and "конец." in nested_image_prose
+    for hidden in ("СЕКРЕТНЫЙ", "[cover]", "/private/image.png"):
+        assert hidden not in nested_image_prose, nested_image_prose
+    # An unknown reference is visible Markdown, not metadata.
+    assert "[missing]" in prose_only("См. [Текст [в скобках]][missing].")
+    # Shortcut image references are images only when their label resolves.
+    shortcut = (
+        "Видимый текст до.\n"
+        "![СЕКРЕТНЫЙ ALT]\n"
+        "\n"
+        "[СЕКРЕТНЫЙ ALT]: /img.png\n"
+        "\n"
+        "![НЕОПРЕДЕЛЁННЫЙ ЛИТЕРАЛ]\n"
+        "Видимый текст после.\n"
+    )
+    shortcut_text = prose_only(shortcut)
+    for item in ("Видимый текст до", "Видимый текст после", "НЕОПРЕДЕЛЁННЫЙ ЛИТЕРАЛ"):
+        assert item in shortcut_text, ("reference shortcut lost prose", item, shortcut_text)
+    for item in ("СЕКРЕТНЫЙ ALT", "/img.png"):
+        assert item not in shortcut_text, ("reference shortcut leaked metadata", item, shortcut_text)
+
+    # Escaping the image marker changes ![label] into a literal '!' and a
+    # visible reference link. The unescaped image still hides its alt text.
+    shortcut_escaped = (
+        "\\![Документ]\n"
+        "\n"
+        "[Документ]: /private/path\n"
+    )
+    shortcut_unescaped = (
+        "![Документ]\n"
+        "\n"
+        "[Документ]: /private/path\n"
+    )
+    escaped_prose = prose_only(shortcut_escaped)
+    unescaped_prose = prose_only(shortcut_unescaped)
+    assert "Документ" in escaped_prose, escaped_prose
+    assert "Документ" not in unescaped_prose, unescaped_prose
+    for excerpt in (escaped_prose, unescaped_prose):
+        assert "/private/path" not in excerpt, excerpt
+
+    # Shortcut image labels obey CommonMark escapes and balanced brackets.
+    escaped_bracket_image = (
+        "![СЕКРЕТНЫЙ \\] ALT]\n\n"
+        "[СЕКРЕТНЫЙ \\] ALT]: /img.png\n"
+    )
+    escaped_bracket_prose = prose_only(escaped_bracket_image)
+    for hidden in ("СЕКРЕТНЫЙ", "ALT", "/img.png"):
+        assert hidden not in escaped_bracket_prose, escaped_bracket_prose
+
+    # The full [label][ref] form follows the same escaped-! rule.
+    full_escaped = "\\![Документ][ref]\n\n[ref]: /private/path\n"
+    full_unescaped = "![Документ][ref]\n\n[ref]: /private/path\n"
+    assert "Документ" in prose_only(full_escaped), prose_only(full_escaped)
+    assert "Документ" not in prose_only(full_unescaped), prose_only(full_unescaped)
+    # An even number of preceding backslashes leaves '!' unescaped.
+    even_escapes = "\\\\![Документ]\n\n[Документ]: /private/path\n"
+    assert "Документ" not in prose_only(even_escapes), prose_only(even_escapes)
+
+    # An escaped bang before an inline link is literal punctuation, not an
+    # image opener. Even backslash parity restores image syntax.
+    inline_escaped_image = (
+        "\\![Документ](/private/guide) и "
+        "![СЕКРЕТНЫЙ ALT](/private/image)\n"
+    )
+    inline_escaped_prose = prose_only(inline_escaped_image)
+    assert "Документ" in inline_escaped_prose, inline_escaped_prose
+    assert "СЕКРЕТНЫЙ ALT" not in inline_escaped_prose, inline_escaped_prose
+    for path in ("/private/guide", "/private/image"):
+        assert path not in inline_escaped_prose, inline_escaped_prose
+    inline_even_escapes = "\\\\![СКРЫТЫЙ ALT](/private/image)\n"
+    assert "СКРЫТЫЙ ALT" not in prose_only(inline_even_escapes)
+    assert not markdown_inline_links("\\![Документ](/private/guide)")[0][4]
+    assert markdown_inline_links("![Документ](/private/guide)")[0][4]
+
+    # Reference definitions, including inside blockquotes, hide the entire
+    # destination and a continuation title on the next line.
+    long_reference = (
+        "[ref]: /page\n"
+        '  "СЕКРЕТНОЕ TITLE"\n'
+        "\n"
+        "> [other]: /hidden\n"
+        "\n"
+        "Обычный абзац.\n"
+    )
+    long_ref_text = prose_only(long_reference)
+    assert "Обычный абзац." in long_ref_text, long_ref_text
+    for hidden in ("СЕКРЕТНОЕ TITLE", "/page", "/hidden", "[other]:"):
+        assert hidden not in long_ref_text, ("definition leaked metadata", hidden, long_ref_text)
+
+    # Definitions may omit whitespace entirely between ':' and destination.
+    compact_reference = (
+        "[ref]:/private/internal-path\n"
+        "\n"
+        "Текст со [ссылкой][ref].\n"
+    )
+    compact_body = prose_only(compact_reference)
+    assert "Текст со" in compact_body and "ссылкой" in compact_body, compact_body
+    assert "/private/internal-path" not in compact_body, compact_body
+    assert "[ref]:" not in compact_body, compact_body
+
+    # A malformed bare destination is not a reference definition: the full
+    # line remains visible text, including an unmatched parenthesis.
+    for broken in ("/broken(foo", "/broken)foo"):
+        invalid_reference = f"[ref]: {broken}\n\nСледующий абзац.\n"
+        invalid_body = prose_only(invalid_reference)
+        assert f"[ref]: {broken}" in invalid_body, invalid_body
+        assert "Следующий абзац." in invalid_body, invalid_body
+
+    # Balanced nested parentheses and escaped parentheses are valid
+    # destination syntax and must still be excluded.
+    for valid in ("/valid(foo)", "/valid(and(nested))", r"/escaped\(foo"):
+        valid_reference = f"[ref]: {valid}\n\nСм. [материал][ref].\n"
+        valid_body = prose_only(valid_reference)
+        assert "См." in valid_body and "материал" in valid_body, valid_body
+        assert valid not in valid_body and "[ref]:" not in valid_body, valid_body
+        assert "[ref]" not in valid_body, valid_body
+
+    # An empty angle-bracket destination is valid CommonMark (example 200).
+    empty_reference = "[ref]: <>\n\nСм. [материал][ref].\n"
+    empty_body = prose_only(empty_reference)
+    assert "См." in empty_body and "материал" in empty_body, empty_body
+    for hidden in ("[ref]:", "<>", "[ref]"):
+        assert hidden not in empty_body, (hidden, empty_body)
+
+    # A reference definition cannot interrupt a paragraph (CommonMark
+    # example 213); the entire second line remains reader-visible.
+    visible_definition = (
+        "Видимая читателю строка\n"
+        "[ref]: /page\n"
+        "\n"
+        "Следующий абзац.\n"
+    )
+    visible_definition_prose = prose_only(visible_definition)
+    for phrase in ("Видимая читателю строка", "[ref]: /page", "Следующий абзац"):
+        assert phrase in visible_definition_prose, ("paragraph reference lost", phrase, visible_definition_prose)
+
+    # CommonMark also permits a destination on the next line and a title
+    # spanning multiple subsequent lines, including in blockquotes.
+    multiline_reference = (
+        "[ref]:\n"
+        "/private/path\n"
+        "\n"
+        "[other]: /page '\n"
+        "ТЕХНИЧЕСКИЙ TITLE\n"
+        "ещё строка\n"
+        "'\n"
+        "\n"
+        "> [third]:\n"
+        "> /private/quoted\n"
+        "\n"
+        "См. [ссылку][ref] и [источник][other].\n"
+    )
+    multiline_reference_prose = prose_only(multiline_reference)
+    for visible in ("См.", "ссылку", "источник"):
+        assert visible in multiline_reference_prose, ("multiline ref lost prose", visible, multiline_reference_prose)
+    for secret in ("[ref]:", "/private/path", "ТЕХНИЧЕСКИЙ TITLE",
+                   "ещё строка", "/private/quoted", "[third]:"):
+        assert secret not in multiline_reference_prose, (
+            "multiline ref leaked", secret, multiline_reference_prose
+        )
+
+    # Entire GFM table blocks are structural data, with or without border pipes.
+    table = """Текст до таблицы.
+
+| Участник | Сумма |
+| --- | ---: |
+| Иван | 1000 |
+| Ольга | 2000 |
+
+Текст после таблицы.
+"""
+    table_result = prose_only(table)
+    assert "Текст до таблицы" in table_result and "Текст после таблицы" in table_result
+    for value in ("Участник", "Сумма", "Иван", "Ольга", "1000", "2000"):
+        assert value not in table_result, ("table leaked", value, table_result)
+
+    borderless = """До таблицы.
+Имя | Значение
+--- | ---
+Мария | 900
+
+После таблицы.
+"""
+    borderless_result = prose_only(borderless)
+    assert "До таблицы" in borderless_result and "После таблицы" in borderless_result
+    assert "Мария" not in borderless_result and "900" not in borderless_result
+    assert "Обычная проза" in prose_only("Обычная проза А | Б без таблицы.")
+    quoted_table = (
+        "Обычная проза до цитаты.\n"
+        "> | Участник | Сумма |\n"
+        "> | --- | --- |\n"
+        "> | Иван | 1000 |\n"
+        ">\n"
+        "> Видимая проза после таблицы внутри цитаты.\n"
+        "Обычная проза после цитаты.\n"
+    )
+    quoted_prose = prose_only(quoted_table)
+    for visible in ("Обычная проза до цитаты", "Видимая проза после таблицы",
+                    "Обычная проза после цитаты"):
+        assert visible in quoted_prose, ("prose lost near quoted table", visible, quoted_prose)
+    for hidden in ("Участник", "Сумма", "Иван", "1000"):
+        assert hidden not in quoted_prose, ("quoted GFM table leaked", hidden, quoted_prose)
+
+    # A GFM table row with only its first cell populated can contain no
+    # pipe. It remains table data up to the next blank line/new block.
+    pipe_free_row = (
+        "| Имя | Сумма |\n"
+        "| --- | --- |\n"
+        "СЕКРЕТНЫЕ ТАБЛИЧНЫЕ ДАННЫЕ\n"
+        "\n"
+        "Видимый абзац.\n"
+    )
+    pipe_free_result = prose_only(pipe_free_row)
+    assert "СЕКРЕТНЫЕ ТАБЛИЧНЫЕ ДАННЫЕ" not in pipe_free_result, pipe_free_result
+    assert "Видимый абзац." in pipe_free_result, pipe_free_result
+    table_then_heading = (
+        "| Имя | Сумма |\n"
+        "| --- | --- |\n"
+        "ДАННЫЕ БЕЗ PIPES\n"
+        "# Видимый заголовок после таблицы\n"
+    )
+    heading_result = prose_only(table_then_heading)
+    assert "ДАННЫЕ БЕЗ PIPES" not in heading_result, heading_result
+    assert "Видимый заголовок после таблицы" in heading_result, heading_result
+
+    # An inline HTML tag at the beginning of a GFM row is still a table
+    # cell, and must not terminate the table as a new HTML block.
+    inline_html_gfm = (
+        "| Участник | Сумма |\n"
+        "| --- | --- |\n"
+        "<em>ТАБЛИЧНЫЕ ДАННЫЕ</em> | 500\n"
+        "\n"
+        "Видимый абзац.\n"
+    )
+    inline_html_result = prose_only(inline_html_gfm)
+    assert "ТАБЛИЧНЫЕ ДАННЫЕ" not in inline_html_result, inline_html_result
+    assert "500" not in inline_html_result, inline_html_result
+    assert "Видимый абзац." in inline_html_result, inline_html_result
+
+    # Pipes inside Markdown code spans and escaped pipes are not table columns.
+    ticks = chr(96)
+    headers = [
+        f"| Оператор {ticks}a|b{ticks} | Значение |",
+        f"| Оператор {ticks * 2}a|b{ticks * 2} | Значение |",
+        r"| Оператор a\|b | Значение |",
+    ]
+    for header in headers:
+        assert len(_table_cells(header)) == 2, (_table_cells(header), header)
+        table_with_code = (
+            "Проза до таблицы.\n" + header
+            + "\n| --- | --- |\n| Пример | 1000 |\n\nПроза после таблицы.\n"
+        )
+        extracted = prose_only(table_with_code)
+        for visible in ("Проза до таблицы", "Проза после таблицы"):
+            assert visible in extracted, (visible, extracted)
+        for hidden in ("Оператор", "Значение", "Пример", "1000"):
+            assert hidden not in extracted, (hidden, extracted)
+
+    # HTML/MDX table data is excluded, while surrounding prose survives.
+    html_table = (
+        "Проза перед таблицей.\n"
+        "<table className=\"data\"><thead><tr><th>Участник</th></tr></thead>"
+        "<tbody><tr><td>Иван</td><td>1000</td></tr></tbody></table>\n"
+        "<p>Проза после таблицы.</p>\n"
+    )
+    jsx_table = (
+        "Начальный абзац.\n"
+        "<Table data={{ secret: 'СЕКРЕТНЫЕ ДАННЫЕ' }}>"
+        "<tr><td>Мария</td><td>2000</td></tr></Table>\n"
+        "Заключительный абзац.\n"
+    )
+    for sample, visible, hidden in (
+        (html_table, ("Проза перед таблицей", "Проза после таблицы"),
+         ("Участник", "Иван", "1000")),
+        (jsx_table, ("Начальный абзац", "Заключительный абзац"),
+         ("Мария", "2000", "СЕКРЕТНЫЕ ДАННЫЕ")),
+    ):
+        result = prose_only(sample)
+        for value in visible:
+            assert value in result, ("lost prose beside table", value, result)
+        for value in hidden:
+            assert value not in result, ("HTML/JSX table leaked", value, result)
+
+    # Attribute values can contain tag-like text or <!-- without being
+    # actual tag/comment tokens. Only the outer raw table may end its mask.
+    raw_attrs = (
+        '<table><tr><td title="</table>">СЕКРЕТНЫЕ ДАННЫЕ</td></tr></table>\n'
+        "Видимая проза после первой таблицы.\n",
+        '<table><td title="<!--">ДАННЫЕ ВТОРОЙ ТАБЛИЦЫ</td></table>\n'
+        "Видимая проза после второй таблицы.\n",
+    )
+    for source, visible, hidden in (
+        (raw_attrs[0], "Видимая проза после первой таблицы", "СЕКРЕТНЫЕ ДАННЫЕ"),
+        (raw_attrs[1], "Видимая проза после второй таблицы", "ДАННЫЕ ВТОРОЙ ТАБЛИЦЫ"),
+    ):
+        extracted = prose_only(source)
+        assert visible in extracted, ("tag attribute swallowed prose", extracted)
+        assert hidden not in extracted, ("tag attribute leaked raw data", extracted)
+
+    # CommonMark treats a four-space line as paragraph continuation when
+    # there is no intervening blank line; after a blank, it is indented code.
+    paragraph_continuations = (
+        "Начало абзаца\n"
+        "    ВАЖНОЕ ПРОДОЛЖЕНИЕ\n"
+        "    ВТОРОЕ ПРОДОЛЖЕНИЕ\n"
+        "Конец абзаца.\n"
+        "\n"
+        "    СЕКРЕТНЫЙ КОД ПОСЛЕ ПУСТОЙ СТРОКИ\n"
+        "\n"
+        "Обычная проза после кода.\n"
+    )
+    paragraph_prose = prose_only(paragraph_continuations)
+    for fragment in ("Начало абзаца", "ВАЖНОЕ ПРОДОЛЖЕНИЕ",
+                     "ВТОРОЕ ПРОДОЛЖЕНИЕ", "Конец абзаца",
+                     "Обычная проза после кода"):
+        assert fragment in paragraph_prose, ("paragraph continuation lost", fragment, paragraph_prose)
+    assert "СЕКРЕТНЫЙ КОД ПОСЛЕ ПУСТОЙ СТРОКИ" not in paragraph_prose, paragraph_prose
+    assert len(ordinary_paragraph_continuations(paragraph_continuations)) == 2
+
+    # CommonMark tabs advance to the next 4-column tab stop. One leading
+    # tab after a blank line starts code; without the blank it continues a
+    # visible paragraph. Nested list code obeys the same column arithmetic.
+    tab_indented = (
+        "Введение.\n\n"
+        "\tconst secret = 123;\n"
+        "\tСЕКРЕТ_В_КОДЕ\n\n"
+        "Следующий абзац.\n"
+    )
+    tab_result = prose_only(tab_indented)
+    assert "Введение." in tab_result and "Следующий абзац." in tab_result, tab_result
+    assert "const secret" not in tab_result, tab_result
+    assert "СЕКРЕТ_В_КОДЕ" not in tab_result, tab_result
+    continued_paragraph = "Видимый абзац.\n\tВИДИМОЕ_ПРОДОЛЖЕНИЕ\n"
+    continued_result = prose_only(continued_paragraph)
+    assert "ВИДИМОЕ ПРОДОЛЖЕНИЕ" in continued_result, continued_result
+
+    nested_tab_list = (
+        "- Верхний пункт\n"
+        "\t- Вложенный пункт\n"
+        "\n"
+        "\t\t\tСЕКРЕТ_ВЛОЖЕННОГО_КОДА\n"
+        "\n"
+        "После списка.\n"
+    )
+    nested_tab_result = prose_only(nested_tab_list)
+    for visible in ("Верхний пункт", "Вложенный пункт", "После списка"):
+        assert visible in nested_tab_result, (visible, nested_tab_result)
+    assert "СЕКРЕТ_ВЛОЖЕННОГО_КОДА" not in nested_tab_result, nested_tab_result
+
+    # Multi-line list-indented code remains code until it dedents, including
+    # after intervening blank lines and with Markdown-like syntax inside code.
+    list_code = (
+        "- Видимый пункт\n"
+        "\n"
+        "      КОД_1\n"
+        "      КОД_2\n"
+        "\n"
+        "      - КОД_3\n"
+        "      ~~~\n"
+        "\n"
+        "После списка.\n"
+    )
+    list_code_result = prose_only(list_code)
+    assert "Видимый пункт" in list_code_result, list_code_result
+    assert "После списка." in list_code_result, list_code_result
+    for hidden in ("КОД_1", "КОД_2", "КОД_3", "~~~"):
+        assert hidden not in list_code_result, (hidden, list_code_result)
+
+    # Indentation in a JSX/MDX Markdown container is formatting, not
+    # automatically an indented code block. Keep reader-visible text at
+    # 0/2/4/6 spaces, including nested and multi-paragraph component bodies.
+    for padding in (0, 2, 4, 6):
+        nested_mdx = (
+            "<Accordion>\n"
+            '  <AccordionItem title="СЛУЖЕБНЫЙ ПРОП">\n'
+            + " " * padding + "Видимая статья в аккордеоне.\n"
+            + "\n"
+            + " " * padding + "Второй видимый абзац.\n"
+            + "  </AccordionItem>\n"
+            + "</Accordion>\n"
+            + "\n"
+            + "<Aside>\n"
+            + " " * padding + "Видимое пояснение Aside.\n"
+            + "</Aside>\n"
+            + "<Steps>\n"
+            + " " * padding + "1. Видимое содержание шага.\n"
+            + "</Steps>\n"
+            + "\n"
+            + "Внешняя проза после компонента.\n"
+        )
+        result_mdx = prose_only(nested_mdx)
+        for visible in ("Видимая статья в аккордеоне", "Второй видимый абзац",
+                        "Видимое пояснение Aside", "Видимое содержание шага",
+                        "Внешняя проза после компонента"):
+            assert visible in result_mdx, ("MDX lost reader text", padding, visible, result_mdx)
+        assert "СЛУЖЕБНЫЙ ПРОП" not in result_mdx, result_mdx
+    real_mdx_code = (
+        "<Aside>\n"
+        "\n"
+        "        СЛУЖЕБНЫЙ КОД В ASIDE\n"
+        "\n"
+        "    Видимый текст после кода.\n"
+        "</Aside>\n"
+    )
+    code_prose = prose_only(real_mdx_code)
+    assert "СЛУЖЕБНЫЙ КОД В ASIDE" not in code_prose, code_prose
+    assert "Видимый текст после кода" in code_prose, code_prose
+
+    # Indented nested list items are prose, but standalone indented blocks are code.
+    nested = """- Основной пункт списка
+    - Вложенный пункт списка
+      Продолжение вложенного пункта
+
+После списка.
+
+    СКРЫТЫЙ КОД
+"""
+    nested_result = prose_only(nested)
+    for value in ("Основной пункт", "Вложенный пункт", "Продолжение вложенного пункта", "После списка"):
+        assert value in nested_result, ("nested list lost", value, nested_result)
+    assert "СКРЫТЫЙ КОД" not in nested_result
+
+    # Currency remains visible, but spaced numeric expressions are math.
+    assert "2 + 2 = 4" not in prose_only("Формула $2 + 2 = 4$ описана словами.")
+    assert "$5" in prose_only("Цена $5 за набор.")
+    # Nested quote headings should contain their visible text but no markup.
+    heading = prose_only("> > ## Видимый заголовок\n> # Још један наслов.\n")
+    assert "Видимый заголовок" in heading and "Још један наслов" in heading, heading
+    assert "#" not in heading and ">" not in heading, heading
+    # Markdown braces are not JavaScript; MDX braces remain expressions.
+    markdown_braces = "Буквально {важное пояснение} и следующий абзац."
+    assert "важное пояснение" in prose_only(markdown_braces, is_mdx=False)
+    assert "важное пояснение" not in prose_only(markdown_braces, is_mdx=True)
+
+    # Inline TeX is markup; an escaped dollar or an unpaired currency sign is not.
+    dollars = r"Формула $E=mc^2$ используется. Цена $5, другая цена $10. Экранировано \$5."
+    dollars_result = prose_only(dollars)
+    assert "$E=mc^2$" not in dollars_result and "E=mc" not in dollars_result
+    for value in ("Формула", "используется", "$5", "$10"):
+        assert value in dollars_result, ("currency or prose lost", value, dollars_result)
+    assert "$E = mc^2$" not in prose_only("Формула $E = mc^2$ описана словами.")
+    escaped_math = prose_only(r"Оставить литерал \$E=mc^2\$ как текст.")
+    assert "E=mc^2" in escaped_math, ("escaped math incorrectly masked", escaped_math)
+    # Price ranges and successive prices are prose, not mathematical pairs.
+    monetary_examples = (
+        ("Стоимость $100–$200.", ("$100", "$200")),
+        ("Цена $5/$10 за набор.", ("$5", "$10")),
+        ("Стоимость $100 - $200.", ("$100", "$200")),
+    )
+    for original, amounts in monetary_examples:
+        extracted = prose_only(original)
+        for amount in amounts:
+            assert amount in extracted, ("currency masked as math", original, extracted)
+    assert "2+2" not in prose_only("Математика $2+2$ остаётся формулой.")
+
+    for mixed in (
+        "Стоимость $100–200, формула $E=mc^2$ применима.",
+        "Стоимость $100/час, формула $E=mc^2$ применима.",
+        "Цена $100 - 200, формула $E=mc^2$ применима.",
+    ):
+        mixed_prose = prose_only(mixed)
+        assert "$100" in mixed_prose and "формула" in mixed_prose, mixed_prose
+        assert "применима" in mixed_prose and "E=mc^2" not in mixed_prose, mixed_prose
+    for arithmetic in ("$2-2$", "$2/2$"):
+        assert "$2" not in prose_only("Формула " + arithmetic + " записана."), arithmetic
+
+    # Footnote definitions can contain indented, reader-visible continuation
+    # lines, even after a blank line. A later independent indented code block
+    # must still be suppressed after the definition's unindented prose ends.
+    footnote = (
+        "[^1]: Документ и источник.\n"
+        "    Уточнение о статусе источника.\n"
+        "\n"
+        "    Продолжение сноски после пустой строки.\n"
+        "Обычная проза после сноски.\n"
+        "\n"
+        "    КОД ВНЕ СНОСКИ\n"
+    )
+    footnote_prose = prose_only(footnote)
+    for visible in ("Документ и источник", "Уточнение о статусе источника",
+                    "Продолжение сноски после пустой строки",
+                    "Обычная проза после сноски"):
+        assert visible in footnote_prose, ("footnote prose lost", visible, footnote_prose)
+    assert "КОД ВНЕ СНОСКИ" not in footnote_prose, footnote_prose
+
+    # A pure rename must compare the new head path to the previous base path,
+    # and must not load either Humanizer or repeat all existing findings.
+    from tempfile import TemporaryDirectory
+    with TemporaryDirectory() as folder:
+        old_root = Path(folder) / "old"
+        new_root = Path(folder) / "new"
+        old_path = DOCS + "ru/old.md"
+        new_path = DOCS + "ru/new.md"
+        article_text = "---\ntitle: Hidden title\n---\nСтарая проверяемая проза.\n"
+        for root, relative in ((old_root, old_path), (new_root, new_path)):
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(article_text, encoding="utf-8")
+        rename = json.loads(json.dumps({"head": new_path, "base": old_path}))
+        summary = report([rename], old_root, new_root,
+                         Path(folder) / "not-installed-ru",
+                         Path(folder) / "not-installed-sr")
+        assert MARKER in summary, summary
+        assert new_path not in summary, ("pure rename reported as new", summary)
+        assert "Новых замечаний нет" not in summary, summary
+
+    # Exercise the full report path for both languages with nested,
+    # multi-paragraph MDX content. Stubs keep the test deterministic and
+    # require prose to reach both reviewer APIs before a report is generated.
+    with TemporaryDirectory() as folder:
+        root = Path(folder)
+        base_dir = root / "base"
+        head_dir = root / "head"
+        ru_dir = root / "ru"
+        sr_dir = root / "sr"
+        for path in (ru_dir / "scripts", sr_dir / "scripts"):
+            path.mkdir(parents=True, exist_ok=True)
+        (ru_dir / "scripts/review.py").write_text(
+            "def run_review(text, **kwargs):\n"
+            "    assert 'видимый' in text.lower(), text\n"
+            "    assert 'СЛУЖЕБНЫЙ' not in text, text\n"
+            "    return {'findings': []}\n",
+            encoding="utf-8",
+        )
+        (sr_dir / "scripts/check.py").write_text(
+            "def review(text):\n"
+            "    assert 'видљив' in text.lower(), text\n"
+            "    assert 'СЛУЖБЕНИ' not in text, text\n"
+            "    return []\n",
+            encoding="utf-8",
+        )
+        pair = (
+            (DOCS + "ru/mdx-review.mdx", "видимый текст для русского редактора", "СЛУЖЕБНЫЙ"),
+            (DOCS + "mdx-review.mdx", "видљив текст за српског уредника", "СЛУЖБЕНИ"),
+        )
+        changed = []
+        for document, phrase, secret in pair:
+            target = head_dir / document
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(
+                '<Accordion><AccordionItem title="' + secret + '">\n'
+                '    ' + phrase + '.\n'
+                '\n'
+                '      ' + phrase + ' у другом пасусу.\n'
+                '</AccordionItem></Accordion>\n'
+                '<Steps>\n'
+                '    1. ' + phrase + ' у кораку.\n'
+                '</Steps>\n',
+                encoding="utf-8",
+            )
+            changed.append(document)
+        summary = report(changed, base_dir, head_dir, ru_dir, sr_dir)
+        assert "humanizer_russian" in summary and "humanizer_serbian" in summary, summary
+        for path in changed:
+            assert path in summary, ("report skipped nested MDX", path, summary)
+
+    # Serbian findings are subtracted by evidence multiset, not by total rule count.
+    from types import SimpleNamespace
+
+    def serbian_stub(text: str):
+        if text == "before":
+            return [SimpleNamespace(
+                rule_id="sr_test", category="AI_STYLE_SIGNAL", message="Sample",
+                count=2, evidence=["Стари образац", "Исти образац"])]
+        if text == "after":
+            return [SimpleNamespace(
+                rule_id="sr_test", category="AI_STYLE_SIGNAL", message="Sample",
+                count=2, evidence=["Исти образац", "Нови образац"])]
+        if text == "same":
+            return [SimpleNamespace(
+                rule_id="sr_test", category="AI_STYLE_SIGNAL", message="Sample",
+                count=2, evidence=["Исти образац", "Стари образац"])]
+        if text == "twice":
+            return [SimpleNamespace(
+                rule_id="sr_test", category="AI_STYLE_SIGNAL", message="Sample",
+                count=3, evidence=["Стари образац", "Исти образац", "Исти образац"])]
+        return []
+
+    module = SimpleNamespace(review=serbian_stub)
+    findings = serbian_new(module, "before", "after")
+    assert len(findings) == 1 and findings[0]["evidence"] == ["Нови образац"], findings
+    assert findings[0]["count"] == 1
+    assert serbian_new(module, "before", "same") == []
+    repeated = serbian_new(module, "before", "twice")
+    assert len(repeated) == 1 and repeated[0]["count"] == 1, repeated
+    assert repeated[0]["evidence"] == ["Исти образац"], repeated
+
+    # Regression coverage for the later CodeRabbit review: fixed and fenced
+    # block boundaries, HTML attributes and JS RegExp in an ESM statement.
+    backslash_attr = '<Aside title="literal\\">Видимый текст.</Aside>\nСледующий абзац.'
+    backslash_prose = prose_only(backslash_attr)
+    assert "Видимый текст." in backslash_prose, backslash_prose
+    assert "Следующий абзац." in backslash_prose, backslash_prose
+
+    for fenced_sample, hidden, visible in (
+        ("- ~~~js\n  СЛУЖЕБНЫЙ КОД\n  ~~~\nПосле списка.\n",
+         "СЛУЖЕБНЫЙ КОД", "После списка."),
+        ("> ~~~js\n> СКРЫТЫЙ КОД\nПосле цитаты.\n",
+         "СКРЫТЫЙ КОД", "После цитаты."),
+    ):
+        extracted = prose_only(fenced_sample)
+        assert hidden not in extracted, (hidden, extracted)
+        assert visible in extracted, (visible, extracted)
+
+    assert markdown_inline_links("[" * 10000) == []
+    assert len(markdown_bracket_pairs("[![alt](src)](href)")) == 2
+
+    for js_regex in (r"/[{]/", r"/[}]/"):
+        regex_esm = (
+            "export const expression = " + js_regex + ";\n\n"
+            "Видимый абзац после regex ESM."
+        )
+        result = prose_only(regex_esm)
+        assert "Видимый абзац после regex ESM" in result, result
+        assert "expression" not in result, result
+
+    invalid_ref = (
+        "[Пояснение]: это не ссылка, а важный текст.\n"
+        "\n"
+        "![Пояснение]\n"
+    )
+    invalid_prose = prose_only(invalid_ref)
+    assert "важный текст" in invalid_prose, invalid_prose
+    assert "Пояснение" in invalid_prose, invalid_prose
+
+    literal_ticks = (
+        "Пишите " + "\\" + chr(96) + "важные слова"
+        + "\\" + chr(96) + " буквально."
+    )
+    assert "важные слова" in prose_only(literal_ticks)
+    unmatched_ticks = "Начало " + chr(96) + "важные слова" + chr(96) * 2 + " конец."
+    assert "важные слова" in prose_only(unmatched_ticks)
+
+    math_with_fence = (
+        "Проза до формулы.\n"
+        + chr(36) * 2 + "\n"
+        + "~~~\n"
+        + "СКРЫТАЯ МАТЕМАТИКА\n"
+        + chr(36) * 2 + "\n"
+        + "Видимый абзац после формулы.\n"
+    )
+    math_prose = prose_only(math_with_fence)
+    assert "СКРЫТАЯ МАТЕМАТИКА" not in math_prose, math_prose
+    assert "Видимый абзац после формулы" in math_prose, math_prose
+
+    # GFM §6.9: www and email autolinks without angle brackets are metadata.
+    gfm_examples = (
+        ("См. www.example.org/help, затем дальше.",
+         "www.example.org/help", "затем дальше"),
+        ("Контакт editor@example.org для связи.",
+         "editor@example.org", "для связи"),
+        ("(www.example.org/a(b)) рядом",
+         "www.example.org/a(b)", "рядом"),
+        ("Почта mailto:editor@example.org и xmpp:test@sub.example.org.",
+         "mailto:editor@example.org", "Почта"),
+    )
+    for sample, hidden, visible in gfm_examples:
+        extracted = prose_only(sample)
+        assert hidden not in extracted and visible in extracted, (sample, extracted)
+    for literal in ("prefixwww.example.org/help", "broken@domain.co-", "not-an-email@foo",
+                    r"\<mailto:visible@example.org>", r"\<editor@example.org>"):
+        assert literal in prose_only(literal), literal
+    # Defined footnotes hide their IDs, but escaped/unresolved literals
+    # remain readable even if a different footnote definition exists.
+    footnote_literals = (
+        r"Пишите \[^буквальное] и [^неизвестное] в учебнике."
+        "\nТекст со сноской[^1].\n\n[^1]: Читательская проза сноски.\n"
+    )
+    footnote_result = prose_only(footnote_literals)
+    for visible in ("буквальное", "неизвестное", "Читательская проза сноски"):
+        assert visible in footnote_result, footnote_result
+    assert "[^1]" not in footnote_result, footnote_result
+
+    # A valid title can contain literal unbalanced '(' characters; its
+    # target remains masked even when a raw parentheses match is absent.
+    quoted_title = '[Документ](path "title with ( literal parenthesis")'
+    quoted_result = prose_only(quoted_title)
+    assert "Документ" in quoted_result and "literal parenthesis" not in quoted_result, quoted_result
+    assert markdown_inline_links(quoted_title), "Valid link with unbalanced title parentheses lost"
+    # Thousands of malformed links without a closed title should be skipped
+    # using the suffix indexes, not by scanning the shared remainder N times.
+    malformed_titles = '[a](path "title' * 5000 + ')'
+    assert markdown_inline_links(malformed_titles) == []
+
+    # A balanced URL can contain text that resembles other inline links.
+    # Each nested '[a](' previously triggered a scan of the shared suffix,
+    # causing quadratic work and spurious link results. The URL is opaque.
+    nested_destination = '[a](' * 5000 + ')' * 5000
+    assert markdown_inline_links(nested_destination) == [
+        (0, len(nested_destination), 1, 2, False)
+    ]
+    assert prose_only(nested_destination).strip() == 'a'
+    # Nested images in actual link labels must still be fully masked.
+    linked_image = '[![СКРЫТЫЙ ALT](/image.png)](/page) текст после.'
+    linked_image_prose = prose_only(linked_image)
+    assert 'СКРЫТЫЙ ALT' not in linked_image_prose, linked_image_prose
+    assert 'текст после.' in linked_image_prose, linked_image_prose
+
+    # Repeated schemes in a single token must not cause quadratic scanning.
+    many_schemes = list("https://a" * 10000)
+    mask_bare_urls(many_schemes)
+    assert not "".join(many_schemes).strip()
+
+    lengthy = "Повторение фрагмента " * 15
+    from types import SimpleNamespace
+    def russian_excerpt_mock(text: str, **kwargs):
+        return {"findings": [{
+            "library_id": "test", "rule_id": "test_signal",
+            "phenomenon_id": "test", "verdict": "note",
+            "excerpt": lengthy + ("СТАРЫЙ" if text == "before" else "НОВЫЙ"),
+        }]}
+    assert len(russian_new(
+        SimpleNamespace(run_review=russian_excerpt_mock), "before", "after"
+    )) == 1
+
+    # Multiline code spans can contain display-math markers on their own
+    # line. The markers are code and must never eat the following prose.
+    for delimiter in (r"\[", "$"):
+        code_math_sample = (
+            "До кода `начало\n" + delimiter + "\nконец` и видимая проза.\n"
+            "\nСледующий читательский абзац.\n"
+        )
+        code_math_prose = prose_only(code_math_sample)
+        for visible in ("До кода", "и видимая проза", "Следующий читательский абзац"):
+            assert visible in code_math_prose, (
+                "inline-code math swallowed prose", delimiter, code_math_prose
+            )
+        assert delimiter not in code_math_prose, (delimiter, code_math_prose)
+
+    # Backtick fences with a backtick in the info string are NOT code
+    # fences under CommonMark §4.5. Do not consume the following prose.
+    invalid_info_fence = (
+        "``` `недопустимая метка`\n"
+        "Видимый абзац после ошибочного fence.\n"
+    )
+    assert "Видимый абзац после ошибочного fence." in prose_only(invalid_info_fence)
+    for valid_fence in (
+        "```python\nСКРЫТЫЙ КОД\n```\n",
+        "~~~ `допустимая метка`\nСКРЫТЫЙ КОД\n~~~\n",
+    ):
+        extracted = prose_only(valid_fence + "Видимый абзац после кода.\n")
+        assert "СКРЫТЫЙ КОД" not in extracted, extracted
+        assert "Видимый абзац после кода." in extracted, extracted
+
+    # Link-reference labels can contain an escaped closing bracket.
+    # Neither a resolved reference's ID nor its definition is prose.
+    escaped_reference = (
+        r'[ref\]]: /internal "СЛУЖЕБНЫЙ ЗАГОЛОВОК"' + "\n\n"
+        + r'[Видимый текст][ref\]]' + "\n"
+    )
+    escaped_prose = prose_only(escaped_reference, is_mdx=False)
+    assert "Видимый текст" in escaped_prose, escaped_prose
+    for hidden in ("/internal", "СЛУЖЕБНЫЙ ЗАГОЛОВОК", "ref"):
+        assert hidden not in escaped_prose, (hidden, escaped_prose)
+
+    huge_report = MARKER + "\n" + ("ТЕКСТ ОТЧЁТА\n" * 10000)
+    shortened = limit_report_size(huge_report, 1024)
+    assert len(shortened.encode("utf-8")) <= 1024
+    assert "часть замечаний не показана" in shortened
+
+    return {"result": "OK", "frontmatter": "excluded", "mdx_jsx": "excluded",
+            "gfm_tables": "excluded", "nested_list_prose": "retained",
+            "inline_math": "excluded", "serbian_evidence_delta": "verified",
+            "readable_prose": "retained", "languages": ["ru", "sr"]}
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--self-test", action="store_true")
+    parser.add_argument("--files", type=Path)
+    parser.add_argument("--base-root", type=Path)
+    parser.add_argument("--head-root", type=Path)
+    parser.add_argument("--russian-root", type=Path)
+    parser.add_argument("--serbian-root", type=Path)
+    parser.add_argument("--output", type=Path)
+    args = parser.parse_args()
+    if args.self_test:
+        print(json.dumps(self_test(), ensure_ascii=False))
+        return 0
+    if not all((args.files, args.base_root, args.head_root, args.russian_root, args.serbian_root, args.output)):
+        parser.error("Review requires all root, file list and output arguments")
+    paths = [json.loads(row) for row in args.files.read_text(encoding="utf-8").splitlines()
+             if row.strip()]
+    result = report(paths, args.base_root, args.head_root, args.russian_root, args.serbian_root)
+    args.output.write_text(result, encoding="utf-8")
+    print(result)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

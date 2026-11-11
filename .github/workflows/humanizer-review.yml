@@ -1,0 +1,283 @@
+name: Језичка редактура / Языковая редактура
+
+on:
+  pull_request:
+    # Always refresh reports, even when the latest diff has no ru/sr articles.
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+# Metadata-only edits do not cancel real reviews. Base-branch edits still do.
+concurrency:
+  group: >-
+    ${{ github.event.action == 'edited' && !github.event.changes.base &&
+        format('humanizer-review-metadata-{0}-{1}', github.event.pull_request.number, github.run_id) ||
+        format('humanizer-review-{0}', github.event.pull_request.number) }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  HUMANIZER_RUSSIAN_SHA: 81af17bcb18ae9364a9f94f4e2f849a68d3b1eee
+  HUMANIZER_SERBIAN_SHA: ebf49b929f4f6c75b2e7e5a8814ff0f17a4f46ab
+
+jobs:
+  humanizer:
+    # A PR base retarget must update the report; title/body edits must not.
+    if: github.event.action != 'edited' || github.event.changes.base != null
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trusted adapter from base
+        id: checkout_base
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Proposed content from PR
+        id: checkout_head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          path: head
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Check trusted adapter availability
+        id: trusted
+        run: |
+          if test -f base/.github/scripts/humanizer_review.py; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "The PR base has no trusted Humanizer adapter; the separate read-only contract workflow tests first integrations." >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Fetch merge-base article snapshot
+        id: snapshot
+        if: steps.trusted.outputs.ready == 'true'
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Adapter stays on trusted base; comparison uses the PR merge base.
+          # A failed snapshot must invalidate the previous comment, not leave
+          # a stale report looking like the latest review.
+          report_unavailable() {
+            printf '%s\n' \
+              '<!-- svesnost-humanizer-review -->' \
+              '## Языковая редактура / Језичка редактура' \
+              '' \
+              'Проверка недоступна: не удалось получить базовую версию статей.' \
+              'Провера није доступна: није могуће преузети основну верзију чланака.' \
+              'Предыдущий отчёт не подтверждает текущий PR. Повторите проверку.' \
+              > /tmp/humanizer-comment.md
+          }
+          trap report_unavailable ERR
+          fetched=false
+          for attempt in 1 2 3; do
+            if git -C base fetch --no-tags origin \
+                "+refs/pull/${PR_NUMBER}/head:refs/remotes/origin/humanizer-pr-head"; then
+              fetched=true
+              break
+            fi
+            echo "::warning::Cannot fetch PR head (attempt ${attempt}/3)"
+            sleep "$((attempt * 2))"
+          done
+          test "$fetched" = true
+          MERGE_BASE="$(git -C base merge-base HEAD refs/remotes/origin/humanizer-pr-head)"
+          test -n "$MERGE_BASE"
+          git -C base worktree add --detach "$GITHUB_WORKSPACE/base-content" "$MERGE_BASE"
+      - name: Select changed article files
+        id: selection
+        if: steps.trusted.outputs.ready == 'true'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        with:
+          script: |
+            const fs = require('fs');
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            });
+            const articles = files
+              .filter(file =>
+                file.status !== 'removed' &&
+                file.filename.startsWith('src/content/docs/') &&
+                /\.(md|mdx)$/.test(file.filename) &&
+                !file.filename.startsWith('src/content/docs/en/')
+              )
+              .map(file => JSON.stringify({
+                head: file.filename,
+                base: file.status === 'renamed' && file.previous_filename
+                  ? file.previous_filename
+                  : file.filename,
+              }));
+            fs.writeFileSync('/tmp/humanizer-files.txt', articles.join('\n'));
+      - name: Fetch pinned language editors
+        id: editors
+        if: steps.trusted.outputs.ready == 'true'
+        run: |
+          git init /tmp/humanizer_russian
+          git -C /tmp/humanizer_russian remote add origin https://github.com/Antiokh/humanizer_russian.git
+          git -C /tmp/humanizer_russian fetch --depth=1 origin "$HUMANIZER_RUSSIAN_SHA"
+          git -C /tmp/humanizer_russian checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/humanizer_russian rev-parse HEAD)" = "$HUMANIZER_RUSSIAN_SHA"
+          git init /tmp/humanizer_serbian
+          git -C /tmp/humanizer_serbian remote add origin https://github.com/Antiokh/humanizer_serbian.git
+          git -C /tmp/humanizer_serbian fetch --depth=1 origin "$HUMANIZER_SERBIAN_SHA"
+          git -C /tmp/humanizer_serbian checkout --detach FETCH_HEAD
+          test "$(git -C /tmp/humanizer_serbian rev-parse HEAD)" = "$HUMANIZER_SERBIAN_SHA"
+      - name: Generate prose-only editorial review
+        id: generate
+        if: steps.trusted.outputs.ready == 'true'
+        run: |
+          python3 base/.github/scripts/humanizer_review.py \
+            --files /tmp/humanizer-files.txt \
+            --base-root base-content \
+            --head-root head \
+            --russian-root /tmp/humanizer_russian \
+            --serbian-root /tmp/humanizer_serbian \
+            --output /tmp/humanizer-comment.md
+      - name: Finalize report, including failures in any review stage
+        id: finalize
+        # A missing trusted adapter invalidates an old report after base
+        # retargeting, but must not create a comment on first integration.
+        # Checkout failures also invalidate previous results.
+        if: >-
+          always() &&
+          (steps.trusted.outputs.ready == 'true' ||
+           steps.trusted.outputs.ready == 'false' ||
+           steps.checkout_base.outcome != 'success' ||
+           steps.checkout_head.outcome != 'success')
+        env:
+          ADAPTER_READY: ${{ steps.trusted.outputs.ready }}
+          BASE_CHECKOUT_OUTCOME: ${{ steps.checkout_base.outcome }}
+          HEAD_CHECKOUT_OUTCOME: ${{ steps.checkout_head.outcome }}
+          SNAPSHOT_OUTCOME: ${{ steps.snapshot.outcome }}
+          SELECTION_OUTCOME: ${{ steps.selection.outcome }}
+          EDITORS_OUTCOME: ${{ steps.editors.outcome }}
+          GENERATE_OUTCOME: ${{ steps.generate.outcome }}
+          REPORT_PATH: /tmp/humanizer-comment.md
+        run: |
+          # A base without the trusted adapter invalidates an earlier report.
+          # First-integration PRs have no existing comment to update.
+          if [ "$ADAPTER_READY" = false ]; then
+            printf '%s\n' \
+              '<!-- svesnost-humanizer-review -->' \
+              '## Языковая редактура / Језичка редактура' \
+              '' \
+              'Проверка недоступна: в текущей базовой ветке нет доверенного адаптера Humanizer.' \
+              'Провера није доступна: у тренутној основној грани нема поузданог Humanizer адаптера.' \
+              'Предыдущий отчёт не подтверждает текущий PR.' \
+              > "$REPORT_PATH"
+          # The successful run leaves its generated report untouched.
+          elif [ "$BASE_CHECKOUT_OUTCOME" != success ] ||
+             [ "$HEAD_CHECKOUT_OUTCOME" != success ] ||
+             [ "$SNAPSHOT_OUTCOME" != success ] ||
+             [ "$SELECTION_OUTCOME" != success ] ||
+             [ "$EDITORS_OUTCOME" != success ] ||
+             [ "$GENERATE_OUTCOME" != success ] ||
+             [ ! -s "$REPORT_PATH" ]; then
+            printf '%s\n' \
+              '<!-- svesnost-humanizer-review -->' \
+              '## Языковая редактура / Језичка редактура' \
+              '' \
+              'Проверка недоступна: один из этапов проверки завершился ошибкой.' \
+              'Провера није доступна: једна од фаза провере је неуспешна.' \
+              'Предыдущий отчёт не подтверждает текущий PR. Повторите проверку.' \
+              > "$REPORT_PATH"
+          fi
+      - name: Add review to Actions summary
+        if: always() && steps.finalize.outcome == 'success'
+        run: cat /tmp/humanizer-comment.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Update PR review comment
+        if: >-
+          always() &&
+          steps.finalize.outcome == 'success' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.actor != 'dependabot[bot]'
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          REPORT_PATH: /tmp/humanizer-comment.md
+          TRUSTED_READY: ${{ steps.trusted.outputs.ready }}
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync(process.env.REPORT_PATH, 'utf8');
+            const marker = '<!-- svesnost-humanizer-review -->';
+            const helperPath = require('path').join(
+              process.env.GITHUB_WORKSPACE,
+              'base/.github/scripts/humanizer_comment.cjs'
+            );
+            let findOwnedReviewComment, isCurrentReviewTarget;
+            if (fs.existsSync(helperPath)) {
+              ({ findOwnedReviewComment, isCurrentReviewTarget } = require(helperPath));
+            } else {
+              // The trusted base checkout itself may have failed. Use only
+              // minimal trusted inline recovery code, never head-branch JS.
+              findOwnedReviewComment = (comments, target) => comments.find(
+                item => item?.user?.login === 'github-actions[bot]' &&
+                  typeof item.body === 'string' && item.body.includes(target)
+              );
+              isCurrentReviewTarget = (expected, actual) =>
+                typeof expected?.head?.sha === 'string' &&
+                expected.head.sha.length > 0 &&
+                expected.head.sha === actual?.head?.sha &&
+                typeof expected?.base?.ref === 'string' &&
+                expected.base.ref.length > 0 &&
+                expected.base.ref === actual?.base?.ref &&
+                typeof expected?.base?.sha === 'string' &&
+                expected.base.sha.length > 0 &&
+                expected.base.sha === actual?.base?.sha;
+            }
+            // Concurrency cancels older runs; this also guards the final
+            // publishing step if a stale job survives cancellation.
+            const current = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (!isCurrentReviewTarget(context.payload.pull_request, current.data)) {
+              core.info('Skip obsolete Humanizer review: PR head or base has changed.');
+              return;
+            }
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const existing = findOwnedReviewComment(comments, marker);
+            // On the initial integration there is no trusted adapter yet.
+            // After retargeting, however, invalidate an existing bot report.
+            if (process.env.TRUSTED_READY === 'false' && !existing) {
+              core.info('No trusted adapter and no previous bot report: skip first integration comment.');
+              return;
+            }
+            // Re-read the head and base after pagination, just before writing.
+            // Comments have no atomic compare-and-swap against PR refs.
+            const beforeWrite = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+            if (!isCurrentReviewTarget(context.payload.pull_request, beforeWrite.data)) {
+              core.info('Skip stale review after comments pagination: PR head or base has changed.');
+              return;
+            }
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
