@@ -19,6 +19,10 @@ sourceRefs:
 
 This is a preliminary source-based biographical profile, not a complete life history. Being recorded as a registered party representative does not, on its own, establish the office of party president.
 
+## Related political events
+
+- [SNS foundation, 2008](/en/events/sns-formation-2008/)
+
 ## Related articles
 
 - [Political party](/en/parties/)

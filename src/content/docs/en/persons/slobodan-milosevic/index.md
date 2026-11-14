@@ -17,6 +17,11 @@ sourceRefs:
 
 This is a preliminary source-based biographical profile, not a complete life history. Being recorded as a registered party representative does not, on its own, establish the office of party president.
 
+## Related political events
+
+- [1990 elections](/en/events/first-multiparty-election-1990/)
+- [5 October 2000](/en/events/october-5-2000/)
+
 ## Related articles
 
 - [Political party](/en/parties/)
