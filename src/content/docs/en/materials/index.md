@@ -1,10 +1,18 @@
 ---
-title: Articles
-description: English-language encyclopedia articles
+title: Articles and analysis
+description: Political programmes and sourced analysis
 sidebar:
   order: 1
 ---
 
-English-language articles will appear here.
+Policy articles retain links to primary documents and distinguish promises from their implementation.
 
-Articles published only in Serbian are not mixed into this edition's navigation or search. Read the [editorial policy](/en/editorial-policy/) for sourcing and verification standards.
+## Programmes and research
+
+- [Student List programme (2026)](/en/materials/studentska-lista-program-2026/) — eleven priorities, twenty policy areas and implementation questions.
+
+## Sources and method
+
+- [Editorial policy](/en/editorial-policy/)
+
+[Political parties](/en/parties/) · [Historical and political events](/en/events/)
