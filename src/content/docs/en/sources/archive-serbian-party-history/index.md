@@ -1,5 +1,5 @@
 ---
-title: Historical Archives of Belgrade: development of party politics
+title: "Historical Archives of Belgrade: development of party politics"
 description: Archival exhibition on Serbia's political parties
 entity: source
 entityId: source:archive-serbian-party-history
