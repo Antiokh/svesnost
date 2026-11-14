@@ -1,19 +1,35 @@
 ---
-title: Serbian Radical Party
-description: Political party; The party appears in the Republic Electoral Commission's party directory, which is not a dated register of currently active parties
+title: "Serbian Radical Party"
+description: "Political party; 1991-02-23; 1990–2026"
 sidebar:
-  order: 20
+  order: 10
 ---
 
-**Serbian Radical Party** (SRS) — political party. An initial source-based party profile. This is **not** a complete history or an independent verification of current registration or leadership.
+**Serbian Radical Party** — political party. A source-based introductory profile for the 1990–2026 period. Complete leadership histories, party programmes and membership records have not been established, and this entry remains open for further documented research.
 
-## Documentary status
+## Official party-register record
 
-The party appears in the Republic Electoral Commission's party directory, which is not a dated register of currently active parties. Participation by this party in the 2026 parliamentary election is not independently established here.[^1]
+Foundation date recorded in the register: **1991-02-23**.[^1]
 
-## Related material
+The foundation date of a registered legal entity may differ from when it adopted its present name. Registration does not prove participation in a given election, and a legal representative is not necessarily the party president.
 
-- [Political parties](/en/parties/)
-- [State party register](https://upit.rps.gov.rs/)
+## Leaders and significant figures
 
-[^1]: **Document / publication · limited to a directory listing** — [Electoral Commission: political-party directory](https://www.rik.parlament.gov.rs/tekst/sr/101/politicke-stranke.php); the page does not specify an update date. 
+- [Vojislav Šešelj](/en/persons/vojislav-seselj/) — Person recorded as the **legal representative** in the official register (31.10.2026).[^2]
+- [Tomislav Nikolić](/en/persons/tomislav-nikolic/) — Previously associated with the party (according to the cited source).[^3]
+- [Aleksandar Vučić](/en/persons/aleksandar-vucic/) — Previously associated with the party (according to the cited source).[^4]
+
+## Related organisations
+
+These links provide starting points to examine splits, cooperation and renaming. They do not on their own establish legal succession or an alliance.
+
+- [Serbian Progressive Party](/en/parties/srpska-napredna-stranka/)
+
+- [SRS split and foundation of SNS, 2008](/en/events/sns-formation-2008/)
+
+## Sources
+
+[^1]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
+[^2]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
+[^3]: **Document / publication · source record** — [U.S. Department of State, Serbia background note, December 2008](https://2009-2017.state.gov/outofdate/bgn/serbia/113122.htm).
+[^4]: **Document / publication · source record** — [U.S. Department of State, Serbia background note, December 2008](https://2009-2017.state.gov/outofdate/bgn/serbia/113122.htm).

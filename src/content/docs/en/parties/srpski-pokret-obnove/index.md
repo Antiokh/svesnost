@@ -1,19 +1,34 @@
 ---
-title: Serbian Renewal Movement
-description: Political party; The party appears in the Republic Electoral Commission's party directory, which is not a dated register of currently active parties
+title: "Serbian Renewal Movement"
+description: "Political party; 1990-03-14; 1990–2026"
 sidebar:
-  order: 20
+  order: 10
 ---
 
-**Serbian Renewal Movement** (SPO) — political party. An initial source-based party profile. This is **not** a complete history or an independent verification of current registration or leadership.
+**Serbian Renewal Movement** — political party. A source-based introductory profile for the 1990–2026 period. Complete leadership histories, party programmes and membership records have not been established, and this entry remains open for further documented research.
 
-## Documentary status
+## Official party-register record
 
-The party appears in the Republic Electoral Commission's party directory, which is not a dated register of currently active parties. Participation by this party in the 2026 parliamentary election is not independently established here.[^1]
+Foundation date recorded in the register: **1990-03-14**.[^1]
 
-## Related material
+The foundation date of a registered legal entity may differ from when it adopted its present name. Registration does not prove participation in a given election, and a legal representative is not necessarily the party president.
 
-- [Political parties](/en/parties/)
-- [State party register](https://upit.rps.gov.rs/)
+## Leaders and significant figures
 
-[^1]: **Document / publication · limited to a directory listing** — [Electoral Commission: political-party directory](https://www.rik.parlament.gov.rs/tekst/sr/101/politicke-stranke.php); the page does not specify an update date. 
+- [Aleksandar Cvetković](/en/persons/aleksandar-cvetkovic/) — Person recorded as the **legal representative** in the official register (31.10.2026).[^2]
+- [Vuk Drašković](/en/persons/vuk-draskovic/) — Founder or co-founder.[^3]
+
+## Related organisations
+
+These links provide starting points to examine splits, cooperation and renaming. They do not on their own establish legal succession or an alliance.
+
+- [New Serbia](/en/parties/nova-srbija/)
+- [Movement for Restoration of the Kingdom of Serbia](/en/parties/pokret-obnove-kraljevine-srbije/)
+
+- [First multiparty election, 1990](/en/events/first-multiparty-election-1990/)
+
+## Sources
+
+[^1]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
+[^2]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
+[^3]: **Document / publication · source record** — [Belgrade in Transition, historical party-system study](https://etheses.lse.ac.uk/1883/1/U213438.pdf).
