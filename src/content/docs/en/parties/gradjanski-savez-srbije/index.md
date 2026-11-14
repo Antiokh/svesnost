@@ -28,3 +28,9 @@ These links provide starting points to examine splits, cooperation and renaming.
 
 [^1]: **Document / publication · source record** — [Belgrade in Transition, historical party-system study](https://etheses.lse.ac.uk/1883/1/U213438.pdf).
 [^2]: **Document / publication · source record** — [CEU political parties and leaders, historical analysis](https://www.etd.ceu.edu/2008/nphpet01.pdf).
+
+## DOS coalition membership (2000)
+
+[Civic Alliance of Serbia](/en/parties/gradjanski-savez-srbije/) — historical DOS constituent; [Democratic Opposition of Serbia](/en/coalitions/dos-2000/).[^3]
+
+[^3]: **Publication · DOS component in 2000** — [Karakinaris, 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

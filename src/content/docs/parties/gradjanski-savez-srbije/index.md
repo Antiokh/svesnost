@@ -28,3 +28,9 @@ sidebar:
 
 [^1]: **Документ / публикација · податак из извора** — [Belgrade in Transition, historical party-system study](https://etheses.lse.ac.uk/1883/1/U213438.pdf).
 [^2]: **Документ / публикација · податак из извора** — [CEU political parties and leaders, historical analysis](https://www.etd.ceu.edu/2008/nphpet01.pdf).
+
+## Веза са ДОС-ом (2000)
+
+[Грађански савез Србије](/parties/gradjanski-savez-srbije/) — историјски члан ДОС-а; [Демократска опозиција Србије](/coalitions/dos-2000/).[^3]
+
+[^3]: **Публикација · чланство у коалицији 2000** — [Karakinaris, 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).
