@@ -9,6 +9,7 @@ sidebar:
 
 ## Странке изричито поменуте у изборним листама 2026.
 
+- [Српска напредна странка](/parties/srpska-napredna-stranka/)
 - [Социјалистичка партија Србије](/parties/socijalisticka-partija-srbije/)
 - [Јединствена Србија](/parties/jedinstvena-srbija/)
 - [Социјалдемократска партија Србије](/parties/socijaldemokratska-partija-srbije/)
@@ -28,7 +29,6 @@ sidebar:
 
 ## Друге странке документоване у прегледу РИК-а
 
-- [Српска напредна странка](/parties/srpska-napredna-stranka/)
 - [Демократска странка](/parties/demokratska-stranka/)
 - [Српска радикална странка](/parties/srpska-radikalna-stranka/)
 - [Српски покрет Двери](/parties/srpski-pokret-dveri/)
