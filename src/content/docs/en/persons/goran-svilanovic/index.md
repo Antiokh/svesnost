@@ -22,3 +22,9 @@ This is a preliminary source-based biographical profile, not a complete life his
 - [Political party](/en/parties/)
 
 [^1]: **Document / publication · confirms the specified link** — [CEU political parties and leaders, historical analysis](https://www.etd.ceu.edu/2008/nphpet01.pdf).
+
+## DOS coalition (2000)
+
+Named in a historical list of DOS constituents and their associated figures in 2000. [DOS — constituents and leadership](/en/coalitions/dos-2000/).[^2]
+
+[^2]: **Publication** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).
