@@ -13,7 +13,7 @@ sourceRefs:
 
 ## Documented political links
 
-- **[Serbian Patriotic Alliance](/en/parties/srpski-patriotski-savez/)** — listed as registered representative, register dated 31 October 2026.[^1]
+- **[Serbian Patriotic Alliance](/en/parties/srpski-patriotski-savez/)** — representative recorded in the historical entry for a deregistered party.[^1]
 
 This is a preliminary source-based biographical profile, not a complete life history. Being recorded as a registered party representative does not, on its own, establish the office of party president.
 

@@ -14,7 +14,7 @@ sourceRefs:
 ## Documented political links
 
 - **[United Regions of Serbia](/en/parties/ujedinjeni-regioni-srbije/)** — listed as registered representative, register dated 31 October 2026.[^1]
-- **[G17 Plus](/en/parties/g17-plus/)** — listed as registered representative, register dated 31 October 2026.[^2]
+- **[G17 Plus](/en/parties/g17-plus/)** — representative recorded in the historical entry for a deregistered party.[^2]
 
 This is a preliminary source-based biographical profile, not a complete life history. Being recorded as a registered party representative does not, on its own, establish the office of party president.
 
