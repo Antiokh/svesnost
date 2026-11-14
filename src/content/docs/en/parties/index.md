@@ -66,6 +66,12 @@ This is a selection of significant or well-documented organisations, not the ful
 - [G17 Plus](/en/parties/g17-plus/) — 2002-12-15 (Date of deregistration decision: 2013-06-10)
 - [Serbian Patriotic Alliance](/en/parties/srpski-patriotski-savez/) — 2010-03-20 (Date of deregistration decision: 2021-05-28)
 
+- [New Democracy (Serbia)](/en/parties/nova-demokratija-1990/) — 1990 (историјски преглед)
+
+## Coalitions (not registered political parties)
+
+- [Democratic Opposition of Serbia (DOS)](/en/coalitions/dos-2000/) — 2000
+
 ## Older historical parties (before 1990)
 
 - [People's Radical Party (1881)](/en/parties/narodna-radikalna-stranka-1881/)

@@ -24,6 +24,9 @@ sourceRefs:
 
 ## Странке и организације
 
+- [Демократска опозиција Србије (ДОС)](/coalitions/dos-2000/)
+
+
 - [Демократска странка](/parties/demokratska-stranka/)
 - [Демократска странка Србије](/parties/nova-demokratska-stranka-srbije/)
 - [Социјалистичка партија Србије](/parties/socijalisticka-partija-srbije/)

@@ -24,6 +24,9 @@ After the Federal Republic of Yugoslavia's presidential election on 24 September
 
 ## Parties and organisations
 
+- [Democratic Opposition of Serbia (DOS)](/en/coalitions/dos-2000/)
+
+
 - [Democratic Party](/en/parties/demokratska-stranka/)
 - [Democratic Party of Serbia](/en/parties/nova-demokratska-stranka-srbije/)
 - [Socialist Party of Serbia](/en/parties/socijalisticka-partija-srbije/)

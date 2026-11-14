@@ -24,6 +24,9 @@ sourceRefs:
 
 ## Партии и организации
 
+- [Демократическая оппозиция Сербии (ДОС)](/ru/coalitions/dos-2000/)
+
+
 - [Демократическая партия](/ru/parties/demokratska-stranka/)
 - [Демократическая партия Сербии](/ru/parties/nova-demokratska-stranka-srbije/)
 - [Социалистическая партия Сербии](/ru/parties/socijalisticka-partija-srbije/)

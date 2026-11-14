@@ -23,6 +23,9 @@ sourceRefs:
 
 ## Повезани чланци
 
+- [Демократска опозиција Србије (ДОС)](/coalitions/dos-2000/)
+
+
 - [Странка](/parties/)
 
 [^1]: **Документ / публикација · потврђена наведена веза** — [EU Conditionality in Serbia, CEU research, note 150–151](https://www.etd.ceu.edu/2011/weaver_stuart.pdf).

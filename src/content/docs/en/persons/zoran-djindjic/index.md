@@ -19,6 +19,9 @@ This is a preliminary source-based biographical profile, not a complete life his
 
 ## Related articles
 
+- [Democratic Opposition of Serbia (DOS)](/en/coalitions/dos-2000/)
+
+
 - [Political party](/en/parties/)
 
 [^1]: **Document / publication · confirms the specified link** — [EU Conditionality in Serbia, CEU research, note 150–151](https://www.etd.ceu.edu/2011/weaver_stuart.pdf).

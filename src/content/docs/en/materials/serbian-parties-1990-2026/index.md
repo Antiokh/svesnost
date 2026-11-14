@@ -15,9 +15,15 @@ The breakup of Yugoslavia took place over several years, so the survey begins in
 
 ## Parties during the 1990s
 
+[New Democracy (Serbia)](/en/parties/nova-demokratija-1990/) — registered in 1990; coalition list in 1997.
+
+
 The SPS, SPO, DS, SRS, DSS, Civic Alliance of Serbia, Yugoslav Left and others participated in Serbian politics. **A coalition result is not a separate result for each member party.** For instance, the National Assembly records 110 seats for the joint SPS–JUL–New Democracy list in 1997.[^1]
 
 ## DOS and 5 October 2000
+
+[Democratic Opposition of Serbia (DOS)](/en/coalitions/dos-2000/) — coalition, not a party.
+
 
 The Democratic Opposition of Serbia (DOS) was **a coalition**, not a single registered party. After the disputed recognition of results from the 24 September FRY presidential election, mass protests took place on 5 October 2000. Vojislav Koštunica was the DOS presidential candidate and Slobodan Milošević the incumbent. Constituent parties followed separate trajectories afterward.[^2]
 
@@ -37,7 +43,7 @@ The state register records entities such as the Green–Left Front, Serbia Centr
 
 **A registered representative is not necessarily the party president.** Registered parties, coalitions, electoral lists and historical organisations are distinct categories. Related-party links are prompts for further investigation, not proof of legal succession.
 
-This initial survey covers 43 selected organisations. [Catalogue](/en/parties/) · [People](/en/persons/) · [Events](/en/events/)
+This initial survey covers 44 selected organisations. [Catalogue](/en/parties/) · [People](/en/persons/) · [Events](/en/events/)
 
 [^1]: **Document / publication** — [National Assembly, Serbian parliamentary elections 1990](https://www.parlament.gov.rs/narodna-skupstina-/istorijat/posle-drugog-svetskog-rata.938.html?action=print).
 [^2]: **Document / publication** — [RTS, 5 October 2000](https://www.rts.rs/lat/vesti/drustvo/774840/peti-oktobar-deceniju-posle.html).
