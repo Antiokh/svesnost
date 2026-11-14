@@ -5,7 +5,7 @@ sidebar:
   order: 10
 ---
 
-**PUPS — Solidarity and Justice** (раније: Party of United Pensioners of Serbia) — political party. A source-based introductory profile for the 1990–2026 period. Complete leadership histories, party programmes and membership records have not been established, and this entry remains open for further documented research.
+**PUPS — Solidarity and Justice** (formerly the Party of United Pensioners of Serbia) — political party. A source-based introductory profile for the 1990–2026 period. Complete leadership histories, party programmes and membership records have not been established, and this entry remains open for further documented research.
 
 ## Current and former names
 
