@@ -14,6 +14,9 @@ Policy articles retain links to primary documents and distinguish promises from 
 
 - [Student List programme (2026)](/en/materials/studentska-lista-program-2026/) — eleven priorities, twenty policy areas and implementation questions.
 
+- [Democratic Opposition of Serbia — all 18 constituents](/en/coalitions/dos-2000/)
+- [Russian minority and pro-Russian parties — comparative review](/en/materials/russian-parties-serbia-2026/)
+
 ## Sources and method
 
 - [Editorial policy](/en/editorial-policy/)

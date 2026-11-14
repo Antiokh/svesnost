@@ -11,6 +11,12 @@ This is a selection of significant or well-documented organisations, not the ful
 
 **Source date:** the register was rechecked on 14 November 2026; its current pages show a 12 November 2026 update. Individual profiles may cite the earlier 31 October snapshot, so current names should be checked against the newer extract.
 
+## Coalition and minority-party research
+
+- [Democratic Opposition of Serbia — all 18 constituents](/en/coalitions/dos-2000/)
+- [Russian minority and pro-Russian parties — comparative review](/en/materials/russian-parties-serbia-2026/)
+- [Serbian People's Party](/en/parties/srpska-narodna-partija/)
+
 ## Parties founded or originally registered in 1990–1999
 
 - [Democratic Alliance of Croats in Vojvodina](/en/parties/demokratski-savez-hrvata-u-vojvodini/) — 1990-07-15
