@@ -71,10 +71,9 @@
       "date": "2008"
     },
     "partyLsv": {
-      "url": "https://www.rik.parlament.gov.rs/vest/en/4086/50th-session-of-the-republic-electoral-commission-.php",
-      "name": "RIK 2026 certified election lists (background source; LSV founder requires separate verification)",
-      "type": "document",
-      "date": "2026-10-08"
+      "url": "https://lsv.rs/UserFiles/pdf/SV-117.pdf",
+      "name": "LSV party publication: 25 years of political activity, Nenad Čanak",
+      "type": "publication"
     },
     "otvoreniBosko": {
       "url": "https://otvoreniparlament.rs/poslanik/9579",
@@ -108,6 +107,18 @@
       "url": "https://ctr.irmct.org/en/about/what-former-yugoslavia",
       "name": "ICTY/IRMCT, What is the former Yugoslavia?",
       "type": "document"
+    },
+    "narodna2017": {
+      "url": "https://www.politika.rs/sr/clanak/391398/prepakivanje-stranaka",
+      "name": "Politika, 25 Oct 2017, legal transformation of Narodni pokret Srbije into Narodna stranka",
+      "type": "publication",
+      "date": "2017-10-25"
+    },
+    "rtsSDPS": {
+      "url": "https://www.rts.rs/lat/vesti/politika/6011814/rasim-ljajic-presednik-ostavka-sdps.html",
+      "name": "RTS, Rasim Ljajić and Jug Radivojević, 2 August 2026",
+      "type": "publication",
+      "date": "2026-08-02"
     }
   },
   "parties": [
@@ -183,7 +194,7 @@
         [
           "rasim-ljajic",
           "historicalLeader",
-          "rts2026"
+          "rtsSDPS"
         ]
       ],
       [
@@ -321,7 +332,12 @@
         [
           "vuk-jeremic",
           "historicalLeader",
-          "crta"
+          "narodna2017"
+        ],
+        [
+          "miroslav-aleksic",
+          "formerMember",
+          "narodna2017"
         ]
       ],
       [
