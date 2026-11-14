@@ -22,3 +22,9 @@ sourceRefs:
 - [Партия](/ru/parties/)
 
 [^1]: **Документ / публикация · подтверждена указанная связь** — [CEU political parties and leaders, historical analysis](https://www.etd.ceu.edu/2008/nphpet01.pdf).
+
+## Коалиция ДОС (2000)
+
+Связан с организацией — участницей ДОС в 2000 году. [Состав ДОС](/ru/coalitions/dos-2000/).[^2]
+
+[^2]: **Публикация** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).
