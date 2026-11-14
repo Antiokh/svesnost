@@ -1,30 +1,34 @@
 ---
 title: "Russian Party"
-description: "Political party; 2013-06-09; 1990–2026"
+description: "registered as a Russian national-minority party; 2013-06-09"
 sidebar:
-  order: 10
+  order: 11
 ---
 
-**Russian Party** — political party. A source-based introductory profile for the 1990–2026 period. Complete leadership histories, party programmes and membership records have not been established, and this entry remains open for further documented research.
+**Russian Party** — registered as a Russian national-minority party. Registration as a Russian national-minority party **does not establish** that the organisation represents the majority of Russians in Serbia, that its members have Russian ethnicity, or that it is supported by the Russian state.[^1]
 
-## Official party-register record
+## Official political-party register extract
 
-Foundation date recorded in the register: **2013-06-09**.[^1]
+- Foundation date: **2013-06-09**
+- Registration decision date: **2013-07-19**
+- Legal representative in the register: [Slobodan Nikolić](/en/persons/slobodan-nikolic/)[^1]
 
-The foundation date of a registered legal entity may differ from when it adopted its present name. Registration does not prove participation in a given election, and a legal representative is not necessarily the party president.
+## Programmes, elections and public statements
 
-## Leaders and significant figures
+en
 
-- [Slobodan Nikolić](/en/persons/slobodan-nikolic/) — Person recorded as the **legal representative** in the official register (31.10.2026).[^2]
+**Programme adopted on 9 June 2013:** Serbian membership of a Eurasian Union and opposition to NATO; support for Russian-language education and minority identity; a parliament of no more than 150 MPs; seven regions; at least 10% of the budget for agriculture; pronatalist policies including a tax on unmarried employed adults with above-average incomes and a proposal to prohibit abortion except to protect the woman's health. These are **2013 party proposals**, not laws in force.[^2]
 
-## 2026 election
+The party website names Slobodan Nikolić as president and advocates BRICS membership, closer links to Russia and opposition to EU and NATO accession. Its mention of an earlier MP must not be confused with the 2026 election result.[^3]
 
-The party was expressly listed within one of the certified electoral lists for Serbia's 25 October 2026 parliamentary election. Votes and seats were awarded to electoral lists, not allocated separately to each party in a coalition.[^3]
+The “Russian Party — Serbia in BRICS — Slobodan Nikolić” electoral list received **6,503 votes and no seats** in the final 25 October 2026 results published by the electoral commission.[^4]
 
+## Related entries
+
+- [Russian national-minority parties in Serbia](/en/materials/russian-parties-serbia-2026/)
 - [2026 parliamentary election](/en/events/parliamentary-election-2026/)
 
-## Sources
-
-[^1]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
-[^2]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
-[^3]: **Document / publication · source record** — [RIK, certified 2026 parliamentary electoral lists](https://www.rik.parlament.gov.rs/vest/en/4086/50th-session-of-the-republic-electoral-commission-.php), 8.10.2026.
+[^1]: **Document · registration** — [Official political-party register extract](https://upit.rps.gov.rs/Home/GetPDFReport), Register version reviewed: 31.10.2026.
+[^2]: **Document · 2013 party platform** — [Original programme documents](https://api.ruskastranka.rs/wp-content/uploads/2023/03/program_ruske_stranke.pdf), pp. 1–4.
+[^3]: **Party website · self-description** — [Ruska stranka](https://ruskastranka.rs/), accessed 14 Nov 2026.
+[^4]: **Document · election results** — [RIK final report, 5 November 2026](https://www.rik.parlament.gov.rs/vest/sr/822434/75-sednica-republicke-izborne-komisije.php).

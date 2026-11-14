@@ -22,3 +22,9 @@ This is a preliminary source-based biographical profile, not a complete life his
 - [Political party](/en/parties/)
 
 [^1]: **Document / publication · confirms the specified link** — [LSV party publication: 25 years of political activity, Nenad Čanak](https://lsv.rs/UserFiles/pdf/SV-117.pdf).
+
+## DOS coalition (2000)
+
+Associated with one of DOS's component organisations in 2000. [DOS membership](/en/coalitions/dos-2000/).[^2]
+
+[^2]: **Publication** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

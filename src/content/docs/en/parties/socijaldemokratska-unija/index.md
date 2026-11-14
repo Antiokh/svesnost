@@ -18,3 +18,9 @@ Period documented by the historical source: **1996**. This entry treats the orga
 ## Sources
 
 [^1]: **Document / publication · source record** — [CEU political parties and leaders, historical analysis](https://www.etd.ceu.edu/2008/nphpet01.pdf).
+
+## DOS, 2000
+
+[Social Democratic Union](/en/parties/socijaldemokratska-unija/) — constituent of the DOS coalition in 2000. [DOS coalition membership](/en/coalitions/dos-2000/).[^2]
+
+[^2]: **Publication** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

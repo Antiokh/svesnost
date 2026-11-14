@@ -30,3 +30,9 @@ These links provide starting points to examine splits, cooperation and renaming.
 [^1]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^2]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^3]: **Document / publication · source record** — [RTS, Jug Radivojević succeeds Rasim Ljajić, 2 Aug 2026](https://www.rts.rs/lat/vesti/politika/6011814/rasim-ljajic-presednik-ostavka-sdps.html).
+
+## Historical DOS membership
+
+[Sandžak Democratic Party](/en/parties/sandzacka-demokratska-partija/) — organisation in the 2000 DOS coalition. [Full DOS membership](/en/coalitions/dos-2000/).[^4]
+
+[^4]: **Publication** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

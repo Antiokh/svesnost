@@ -22,3 +22,9 @@ sourceRefs:
 - [Странка](/parties/)
 
 [^1]: **Документ / публикација · потврђена наведена веза** — [LSV party publication: 25 years of political activity, Nenad Čanak](https://lsv.rs/UserFiles/pdf/SV-117.pdf).
+
+## Коалиција ДОС (2000)
+
+Повезан са једном од организација у саставу ДОС-а током 2000. [Састав ДОС-а](/coalitions/dos-2000/).[^2]
+
+[^2]: **Публикација** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

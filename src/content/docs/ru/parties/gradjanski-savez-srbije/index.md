@@ -28,3 +28,9 @@ sidebar:
 
 [^1]: **Документ / публикация · данные источника** — [Belgrade in Transition, historical party-system study](https://etheses.lse.ac.uk/1883/1/U213438.pdf).
 [^2]: **Документ / публикация · данные источника** — [CEU political parties and leaders, historical analysis](https://www.etd.ceu.edu/2008/nphpet01.pdf).
+
+## Связь с ДОС (2000)
+
+[Гражданский союз Сербии](/ru/parties/gradjanski-savez-srbije/) — исторический участник ДОС; [Демократическая оппозиция Сербии](/ru/coalitions/dos-2000/).[^3]
+
+[^3]: **Публикация · участие в коалиции 2000** — [Karakinaris, 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

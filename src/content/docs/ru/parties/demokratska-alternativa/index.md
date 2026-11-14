@@ -18,3 +18,9 @@ sidebar:
 ## Источники
 
 [^1]: **Документ / публикация · данные источника** — [CEU political parties and leaders, historical analysis](https://www.etd.ceu.edu/2008/nphpet01.pdf).
+
+## Историческая связь с ДОС
+
+[Демократическая альтернатива](/ru/parties/demokratska-alternativa/) — организация — участник ДОС образца 2000 года. [Полный состав ДОС](/ru/coalitions/dos-2000/).[^2]
+
+[^2]: **Публикация** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

@@ -30,3 +30,9 @@ sidebar:
 [^1]: **Документ / публикација · податак из извора** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^2]: **Документ / публикација · податак из извора** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^3]: **Документ / публикација · податак из извора** — [RTS, Jug Radivojević succeeds Rasim Ljajić, 2 Aug 2026](https://www.rts.rs/lat/vesti/politika/6011814/rasim-ljajic-presednik-ostavka-sdps.html).
+
+## Повезаност са ДОС-ом
+
+[Санџачка демократска партија](/parties/sandzacka-demokratska-partija/) — организација у саставу ДОС 2000. [Потпуни састав ДОС-а](/coalitions/dos-2000/).[^4]
+
+[^4]: **Публикација** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

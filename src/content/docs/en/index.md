@@ -53,6 +53,14 @@ Policy articles retain links to primary documents and distinguish promises from 
 
 - [Serbian parties since Yugoslavia's dissolution (1990–2026)](/en/materials/serbian-parties-1990-2026/)
 
+## DOS and Russian-oriented parties
+
+Minority-party registration, pro-Russian political views and coalition membership are separate categories.
+
+- [Democratic Opposition of Serbia — all 18 constituents](/en/coalitions/dos-2000/)
+- [Russian minority and pro-Russian parties — comparative review](/en/materials/russian-parties-serbia-2026/)
+- [Serbian People's Party](/en/parties/srpska-narodna-partija/)
+
 ## Sources and method
 
 Svesnost is an independent encyclopedia of politics and society. Serbian Cyrillic is the primary edition; Russian and English are independent editorial versions.

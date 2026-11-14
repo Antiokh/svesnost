@@ -22,3 +22,9 @@ sourceRefs:
 - [Партия](/ru/parties/)
 
 [^1]: **Документ / публикация · подтверждена указанная связь** — [Parties and the party system of Serbia and European integrations, 2008](https://www.tandfonline.com/doi/full/10.1080/14613190802146356).
+
+## Коалиция ДОС (2000)
+
+Связан с одной из организаций — участников ДОС в 2000 году. [Состав ДОС](/ru/coalitions/dos-2000/).[^2]
+
+[^2]: **Публикация** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

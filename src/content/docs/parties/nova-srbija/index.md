@@ -31,3 +31,9 @@ sidebar:
 [^1]: **Документ / публикација · податак из извора** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^2]: **Документ / публикација · податак из извора** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^3]: **Документ / публикација · податак из извора** — [Parties and the party system of Serbia and European integrations, 2008](https://www.tandfonline.com/doi/full/10.1080/14613190802146356).
+
+## ДОС, 2000
+
+[Нова Србија](/parties/nova-srbija/) — организација у коалицији ДОС 2000. [ДОС — састав](/coalitions/dos-2000/).[^4]
+
+[^4]: **Публикација** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

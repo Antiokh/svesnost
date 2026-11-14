@@ -18,3 +18,9 @@ sidebar:
 ## Извори
 
 [^1]: **Документ / публикација · податак из извора** — [CEU political parties and leaders, historical analysis](https://www.etd.ceu.edu/2008/nphpet01.pdf).
+
+## Повезаност са ДОС-ом
+
+[Демократска алтернатива](/parties/demokratska-alternativa/) — организација у саставу ДОС 2000. [Потпуни састав ДОС-а](/coalitions/dos-2000/).[^2]
+
+[^2]: **Публикација** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

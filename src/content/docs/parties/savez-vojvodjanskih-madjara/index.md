@@ -28,3 +28,9 @@ sidebar:
 [^1]: **Документ / публикација · податак из извора** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^2]: **Документ / публикација · податак из извора** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^3]: **Документ / публикација · податак из извора** — [RIK, certified 2026 parliamentary electoral lists](https://www.rik.parlament.gov.rs/vest/en/4086/50th-session-of-the-republic-electoral-commission-.php), 8.10.2026.
+
+## Повезаност са ДОС-ом
+
+[Савез војвођанских Мађара](/parties/savez-vojvodjanskih-madjara/) — организација у саставу ДОС 2000. [Потпуни састав ДОС-а](/coalitions/dos-2000/).[^4]
+
+[^4]: **Публикација** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

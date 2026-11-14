@@ -25,3 +25,9 @@ This is a preliminary source-based biographical profile, not a complete life his
 
 [^1]: **Document / publication · confirms the specified link** — [RTS, Rasim Ljajić and Jug Radivojević, 2 August 2026](https://www.rts.rs/lat/vesti/politika/6011814/rasim-ljajic-presednik-ostavka-sdps.html).
 [^2]: **Document / publication · confirms the specified link** — [RTS, Jug Radivojević succeeds Rasim Ljajić, 2 Aug 2026](https://www.rts.rs/lat/vesti/politika/6011814/rasim-ljajic-presednik-ostavka-sdps.html).
+
+## DOS coalition (2000)
+
+Associated with a DOS constituent organisation in 2000. [DOS membership](/en/coalitions/dos-2000/).[^3]
+
+[^3]: **Publication** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

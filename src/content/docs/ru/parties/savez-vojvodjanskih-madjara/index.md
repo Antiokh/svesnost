@@ -28,3 +28,9 @@ sidebar:
 [^1]: **Документ / публикация · данные источника** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^2]: **Документ / публикация · данные источника** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^3]: **Документ / публикация · данные источника** — [RIK, certified 2026 parliamentary electoral lists](https://www.rik.parlament.gov.rs/vest/en/4086/50th-session-of-the-republic-electoral-commission-.php), 8.10.2026.
+
+## Историческая связь с ДОС
+
+[Союз воеводинских венгров](/ru/parties/savez-vojvodjanskih-madjara/) — организация — участник ДОС образца 2000 года. [Полный состав ДОС](/ru/coalitions/dos-2000/).[^4]
+
+[^4]: **Публикация** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

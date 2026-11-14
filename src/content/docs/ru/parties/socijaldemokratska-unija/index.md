@@ -18,3 +18,9 @@ sidebar:
 ## Источники
 
 [^1]: **Документ / публикация · данные источника** — [CEU political parties and leaders, historical analysis](https://www.etd.ceu.edu/2008/nphpet01.pdf).
+
+## ДОС, 2000
+
+[Социал-демократический союз](/ru/parties/socijaldemokratska-unija/) — участник коалиции ДОС 2000 года. [ДОС — полный состав](/ru/coalitions/dos-2000/).[^2]
+
+[^2]: **Публикация** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

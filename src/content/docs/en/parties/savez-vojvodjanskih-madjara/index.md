@@ -28,3 +28,9 @@ The party was expressly listed within one of the certified electoral lists for S
 [^1]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^2]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^3]: **Document / publication · source record** — [RIK, certified 2026 parliamentary electoral lists](https://www.rik.parlament.gov.rs/vest/en/4086/50th-session-of-the-republic-electoral-commission-.php), 8.10.2026.
+
+## Historical DOS membership
+
+[Alliance of Vojvodina Hungarians](/en/parties/savez-vojvodjanskih-madjara/) — organisation in the 2000 DOS coalition. [Full DOS membership](/en/coalitions/dos-2000/).[^4]
+
+[^4]: **Publication** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).
