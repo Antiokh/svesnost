@@ -1,5 +1,5 @@
 ---
-title: Историјски архив Београда: развој партијског живота
+title: "Историјски архив Београда: развој партијског живота"
 description: Историјска изложба о партијском животу Србије
 entity: source
 entityId: source:archive-serbian-party-history
