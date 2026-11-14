@@ -22,6 +22,10 @@ sidebar:
 
 - [Социјалистичка партија Србије](/parties/socijalisticka-partija-srbije/)
 
+## Повезане коалиције и изборни наступи
+
+- [Нова демократија, партнер у изборној коалицији 1997](/parties/nova-demokratija-1990/)
+
 ## Извори
 
 [^1]: **Документ / публикација · податак из извора** — [Washington Post, Mirjana Marković and JUL, 1997](https://www.washingtonpost.com/archive/lifestyle/1997/01/15/milosevics-mira-image/f10cc416-443b-4116-a92c-6c4a6de4ee9b/).

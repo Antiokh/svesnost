@@ -22,6 +22,10 @@ These links provide starting points to examine splits, cooperation and renaming.
 
 - [Socialist Party of Serbia](/en/parties/socijalisticka-partija-srbije/)
 
+## Coalitions and joint electoral lists
+
+- [New Democracy, 1997 joint electoral list partner](/en/parties/nova-demokratija-1990/)
+
 ## Sources
 
 [^1]: **Document / publication · source record** — [Washington Post, Mirjana Marković and JUL, 1997](https://www.washingtonpost.com/archive/lifestyle/1997/01/15/milosevics-mira-image/f10cc416-443b-4116-a92c-6c4a6de4ee9b/).

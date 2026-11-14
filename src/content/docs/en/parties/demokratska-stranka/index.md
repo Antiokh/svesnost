@@ -32,6 +32,10 @@ These links provide starting points to examine splits, cooperation and renaming.
 
 - [5 October 2000](/en/events/october-5-2000/)
 
+## Coalitions and joint electoral lists
+
+- [Democratic Opposition of Serbia (DOS), coalition in 2000](/en/coalitions/dos-2000/)
+
 ## Sources
 
 [^1]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.

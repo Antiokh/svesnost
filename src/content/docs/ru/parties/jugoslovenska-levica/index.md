@@ -22,6 +22,10 @@ sidebar:
 
 - [Социалистическая партия Сербии](/ru/parties/socijalisticka-partija-srbije/)
 
+## Коалиции и совместные списки
+
+- [«Новая демократия», партнёр по избирательному списку 1997](/ru/parties/nova-demokratija-1990/)
+
 ## Источники
 
 [^1]: **Документ / публикация · данные источника** — [Washington Post, Mirjana Marković and JUL, 1997](https://www.washingtonpost.com/archive/lifestyle/1997/01/15/milosevics-mira-image/f10cc416-443b-4116-a92c-6c4a6de4ee9b/).
