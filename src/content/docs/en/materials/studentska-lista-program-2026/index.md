@@ -9,6 +9,10 @@ sidebar:
 
 The following is an **editorial synthesis, not a verbatim translation** of the programme. Each section refers to its official Serbian-language source. Specific thresholds and conditions are distinguished from broader political commitments. Last reviewed **14 November 2026**.
 
+**Related editorial analysis:** the risk scenarios and Argentina comparison are independent research, not statements or promises made by the Student List.
+
+[Economic and institutional risks of Student List reforms](/en/materials/studentska-lista-economic-risks-2026/) · [Argentina: 1989–1990 hyperinflation and the 2023 crisis](/en/materials/argentina-inflation-crises-1989-2023/)
+
 ## The eleven priorities of the Studentski plan
 
 **“Serbia or the Mafia”:** (1) judicial and prosecutorial independence, including a special prosecution police; (2) scrutiny and confiscation of unlawfully acquired assets and lustration of public officials; (3) open procurement and audits of state projects; (4) changes to media regulation and public broadcasting, including the regulator REM and broadcaster RTS.

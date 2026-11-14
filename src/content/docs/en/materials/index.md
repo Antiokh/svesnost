@@ -13,6 +13,8 @@ Policy articles retain links to primary documents and distinguish promises from 
 
 
 - [Student List programme (2026)](/en/materials/studentska-lista-program-2026/) — eleven priorities, twenty policy areas and implementation questions.
+- [Economic and institutional risks of Student List reforms](/en/materials/studentska-lista-economic-risks-2026/) — Economic risk scenarios and the Argentina comparison.
+- [Argentina: 1989–1990 hyperinflation and the 2023 crisis](/en/materials/argentina-inflation-crises-1989-2023/)
 
 - [Democratic Opposition of Serbia — all 18 constituents](/en/coalitions/dos-2000/)
 - [Russian minority and pro-Russian parties — comparative review](/en/materials/russian-parties-serbia-2026/)
