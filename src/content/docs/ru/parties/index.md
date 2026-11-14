@@ -9,6 +9,7 @@ sidebar:
 
 ## Партии, прямо указанные в списках выборов 2026 года
 
+- [Сербская прогрессивная партия](/ru/parties/srpska-napredna-stranka/)
 - [Социалистическая партия Сербии](/ru/parties/socijalisticka-partija-srbije/)
 - [Единая Сербия](/ru/parties/jedinstvena-srbija/)
 - [Социал-демократическая партия Сербии](/ru/parties/socijaldemokratska-partija-srbije/)
@@ -28,7 +29,6 @@ sidebar:
 
 ## Другие партии из перечня РИК
 
-- [Сербская прогрессивная партия](/ru/parties/srpska-napredna-stranka/)
 - [Демократическая партия](/ru/parties/demokratska-stranka/)
 - [Сербская радикальная партия](/ru/parties/srpska-radikalna-stranka/)
 - [Сербское движение «Двери»](/ru/parties/srpski-pokret-dveri/)
