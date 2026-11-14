@@ -1,37 +1,39 @@
 ---
-title: "Argentina: the 1989–1990 hyperinflations and the 2023 price crisis"
-description: "Differences between 1989–1990 hyperinflation and the 2023 crisis; limits of Serbia comparison"
+title: "Argentina's inflation crises: 1989–1990 and 2023"
+description: "What drove Argentina's inflation and how far the comparison with Serbia can go"
 sidebar:
   order: 4
 ---
 
-**Historical context, not a prediction for Serbia.** Argentina experienced strict hyperinflation episodes in 1989–1990. Inflation was extremely high at the end of 2023, but December's **25.5% monthly consumer price rise** was below the conventional 50%-per-month hyperinflation threshold.[^1][^2]
+Argentina experienced hyperinflation in **1989–1990** and another severe inflation crisis at the end of **2023**. The episodes are different. Consumer prices rose **25.5% in December 2023**, below the commonly used hyperinflation threshold of 50% in a single month.[^1][^2]
 
-Annual inflation stood at **160.9%** in November and **211.4%** in December 2023. Javier Milei took office on 10 December. The December rate spans the transition of government and an exchange-rate devaluation, so it must not be attributed entirely to the preceding administration.[^1][^3]
+Annual inflation reached **160.9% in November** and **211.4% in December 2023**. Javier Milei took office on **10 December**. The monthly figure therefore spans a change of government and a subsequent devaluation; it cannot all be assigned to his predecessor's policies.[^1][^3]
 
-The 1989–1990 episodes and the 2023 price crisis are distinct events. Ariel Coremberg's research, published in a Central Bank of Argentina working-paper series, treats 2023 as a period of danger of hyperinflation, not as the same strict CPI hyperinflation episode. The author's views are not automatically those of the central bank.[^2]
+## How the crisis developed
 
-## Economic mechanisms
+The IMF cited persistent fiscal deficits, central-bank financing, depleted reserves and foreign-exchange controls among Argentina's major imbalances. Price controls also distorted market signals. These are **the IMF's conclusions about Argentina**, not proof that every form of government regulation produces inflation.[^4]
 
-The IMF attributed Argentina's severe imbalances to persistent fiscal deficits, central-bank financing, depleted reserves, exchange controls and administrative price distortions. This is **an IMF analysis**, not experimental proof that any form of regulation inevitably causes inflation.[^4]
+When governments repeatedly spend more than they collect, they must borrow, raise revenue, cut spending or find another way to finance the gap. Financing deficits by creating money can accelerate inflation, especially once confidence in the currency has weakened. A deficit on its own, however, does not establish a hyperinflation forecast.
 
-Persistent **fiscal deficits**, inability to finance them sustainably, loss of monetary-policy credibility and monetary financing can generate accelerating inflation. Absent those additional links, a proposed social benefit does not itself establish a hyperinflation outcome.
+Economist Ariel Coremberg describes 2023 as a period when Argentina faced the danger of renewed hyperinflation. His paper appeared in a research series published by the Central Bank of Argentina; it is **his analysis**, not necessarily the bank's institutional position.[^2]
 
-## What can and cannot be extrapolated to Serbia
+## Where the Serbian comparison stops
 
-The Serbian programme contains spending commitments, labour regulation and continued state ownership of strategic firms, but **does not explicitly propose financing deficits by printing money**. It also proposes removing some entry barriers and permits. Argentina is therefore a conditional comparison of mechanisms, not an established forecast.
+Serbia's Student List proposes higher public commitments, labour regulation and continued state ownership in strategic industries. It also proposes eliminating some permits and administrative obstacles. The programme **does not explicitly call for printing money to pay for its promises**.
 
-In June 2026 the IMF described Serbia's public debt as moderate and its reserves as adequate, while noting fiscal risks and the 3%-of-GDP deficit framework. That is a difference in initial conditions, not immunity to future crises.[^5]
+In June 2026 the IMF described Serbia's public debt as moderate and its foreign-exchange reserves as adequate, while noting fiscal risks and a **3%-of-GDP deficit framework**.[^5] Serbia's starting conditions thus differ from Argentina's in 2023.
 
-## Related entries
+A meaningful comparison needs evidence on how Serbia would finance new commitments, whether fiscal rules would hold, how investment would respond and whether monetary policy would remain credible.
 
-- [Serbia's Student List: state intervention, economic risks and the Argentina comparison](/en/materials/studentska-lista-economic-risks-2026/)
+## Related articles
+
+- [Economic risks of the Student List programme](/en/materials/studentska-lista-economic-risks-2026/)
 - [Student List programme (2026)](/en/materials/studentska-lista-program-2026/)
 
 ## Sources
 
-[^1]: **Document · official index** — [INDEC, December 2023 CPI, p. 3](https://www.indec.gob.ar/uploads/informesdeprensa/ipc_01_24DBD5D8158C.pdf), 11 January 2024.
-[^2]: **Publication · author research** — [Coremberg, 2025, published in BCRA's *Ensayos Económicos*](https://www.investigacioneseconomicas.bcra.gob.ar/ensayos_economicos_bcra/article/download/689/593/706).
-[^3]: **Document · policy chronology** — [IMF Argentina Seventh Review, 2024](https://www.imf.org/-/media/files/publications/cr/2024/english/1argea2024001.pdf), official report / authorities' statement.
-[^4]: **Publication · IMF analysis** — [IMF Country Report 24/37](https://www.imf.org/-/media/files/publications/cr/2024/english/1argea2024001.pdf), discussion of fiscal deficit, monetary financing and controls.
-[^5]: **Publication · Serbia macroeconomic baseline** — [IMF Serbia, Third PCI Review, 15 June 2026](https://www.imf.org/en/news/articles/2026/06/15/pr26201-serbia-imf-concludes-the-third-review-under-pci).
+[^1]: **Document · official prices** — [INDEC, December 2023 CPI, p. 3](https://www.indec.gob.ar/uploads/informesdeprensa/ipc_01_24DBD5D8158C.pdf), published 11 January 2024.
+[^2]: **Research · inflation history** — [Ariel Coremberg, *Knocking on Hell's Door*, 2025](https://www.investigacioneseconomicas.bcra.gob.ar/ensayos_economicos_bcra/article/download/689/593/706), *Ensayos Económicos*.
+[^3]: **Document · policy chronology** — [IMF, Argentina's Seventh Review, 2024](https://www.imf.org/-/media/files/publications/cr/2024/english/1argea2024001.pdf).
+[^4]: **Publication · IMF assessment** — [IMF Country Report 24/37](https://www.imf.org/-/media/files/publications/cr/2024/english/1argea2024001.pdf), sections on fiscal deficits, monetary financing and controls.
+[^5]: **Publication · Serbia's macroeconomic baseline** — [IMF, Serbia, Third PCI Review, 15 June 2026](https://www.imf.org/en/news/articles/2026/06/15/pr26201-serbia-imf-concludes-the-third-review-under-pci).
