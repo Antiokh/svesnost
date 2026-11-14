@@ -23,3 +23,9 @@ The foundation date of a registered legal entity may differ from when it adopted
 [^1]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^2]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^3]: **Document / publication · source record** — [LSV party publication: 25 years of political activity, Nenad Čanak](https://lsv.rs/UserFiles/pdf/SV-117.pdf).
+
+## DOS, 2000
+
+[League of Social Democrats of Vojvodina](/en/parties/liga-socijaldemokrata-vojvodine/) — constituent of the DOS coalition in 2000. [DOS coalition membership](/en/coalitions/dos-2000/).[^4]
+
+[^4]: **Publication** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).

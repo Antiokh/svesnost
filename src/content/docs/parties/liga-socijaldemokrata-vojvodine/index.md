@@ -23,3 +23,9 @@ sidebar:
 [^1]: **Документ / публикација · податак из извора** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^2]: **Документ / публикација · податак из извора** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
 [^3]: **Документ / публикација · податак из извора** — [LSV party publication: 25 years of political activity, Nenad Čanak](https://lsv.rs/UserFiles/pdf/SV-117.pdf).
+
+## ДОС, 2000
+
+[Лига социјалдемократа Војводине](/parties/liga-socijaldemokrata-vojvodine/) — организација у коалицији ДОС 2000. [ДОС — састав](/coalitions/dos-2000/).[^4]
+
+[^4]: **Публикација** — [Karakinaris 2009, pp. 9–10](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf).
