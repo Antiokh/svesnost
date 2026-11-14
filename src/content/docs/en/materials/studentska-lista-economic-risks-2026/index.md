@@ -1,237 +1,151 @@
 ---
-title: "Serbia's Student List: state intervention, economic risks and the Argentina comparison"
-description: "Conditional reform risks, regulation and a historically bounded Argentina comparison"
+title: "Economic risks in Serbia's Student List programme"
+description: "Twenty policy areas assessed for regulatory costs, competition, budgets and the Argentina comparison"
 sidebar:
   order: 3
 ---
 
-**Subject:** the 2026 policy proposals of the Serbian electoral list *Students Win*. This is a separate editorial stress test of possible economic and institutional side effects, **not the list's own position or a forecast of an inevitable crisis**. Documented proposals are distinguished from conditional risk mechanisms.
+Serbia's Student List promises to curb corruption and political appointments. Yet its programme would also give the state a larger role in employment rules, subsidies and some markets. What would those changes cost, and who would oversee the new powers?
 
-[Original programme](/en/materials/studentska-lista-program-2026/) · [Argentina: the 1989–1990 hyperinflations and the 2023 price crisis](/en/materials/argentina-inflation-crises-1989-2023/)
+This article examines **possible unintended effects** of the 2026 programme. The scenarios are editorial analysis, not the electoral list's own claims or predictions of certain failure.
 
-## Two different controls: scrutiny of government and government control
+[The original programme](/en/materials/studentska-lista-program-2026/) · [Argentina's inflation crises](/en/materials/argentina-inflation-crises-1989-2023/)
 
-The programme combines anti-corruption and merit-appointment proposals with state ownership, new subsidies, labour obligations and market controls. **State interventionism** is a narrower description of those mechanisms than treating the entire programme as socialism: it does not propose abolishing private enterprise.[^21]
+## Holding the state accountable — or extending its reach?
 
-**Scrutiny of the state** through audits and transparent procurement differs from **state control over markets** through discretionary permissions, subsidies and penalties. The former can restrain corruption; the latter can create opportunities for rent-seeking without independent review. OECD research documents how regulatory complexity disproportionately burdens small firms.[^22]
+Transparent procurement, independent audits and open recruitment can constrain officials. New licences, subsidies and enforcement powers can also give those officials more decisions to make. The [programme](https://gg.studenti.org.rs/lat/program/) contains both approaches.
 
-A risk is a conditional causal hypothesis, not proof that harm will occur or an estimate of its probability. Sound evaluation requires draft laws, multi-year fiscal calculations, current-law comparisons and evidence about firms' responses.
+Continued public ownership and tighter labour rules can be described as **state intervention**. Calling the entire programme socialist would go further than the evidence: private enterprise and ownership remain. OECD research has documented how complex regulation can weigh particularly heavily on smaller firms. That finding does not establish the outcome of these specific Serbian proposals.[^22]
 
-## Possible side effects across the twenty policy areas
+Each section below identifies mechanisms worth testing against draft laws, budgets and market data. Footnotes attached to section headings point to the original programme; **they are sources for the proposal, not proof of the risk**.
 
-### 1. Economy, taxes and finance
+## Risks across the twenty policy areas
 
-Progressive taxation and a state development bank change investment incentives and may enable politically directed lending.
+### 1. Economy, taxes and finance[^1]
 
-Open procurement, merit-based appointments and abolishing entry-needs tests could instead reduce discretion; both directions are present in the programme.
+Higher progressive taxes may change how skilled workers and business owners receive income. A state development bank could offer politically directed loans without strict lending rules. Procurement transparency and the removal of entry permits could work in the other direction, limiting officials' discretion.
 
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^1]
+### 2. Infrastructure, housing and digital services[^2]
 
-### 2. Infrastructure, housing and digital government
+Building public rental housing requires both upfront spending and long-term maintenance. Stronger tenant protections could reduce the private rental supply if landlords see greater risk. A shared government IT platform can simplify operations but also magnify the consequences of one major outage.
 
-Public rental housing and tenant protections require continuing budgets and can change private landlords' incentives.
+### 3. Labour and social protection[^3]
 
-Centralising government IT systems can magnify single-point failures, security breaches and supplier dependence.
+Mandatory pay premiums and shorter fixed-term contracts raise the cost of employing people formally, particularly for smaller firms. Some employers may respond by hiring less. Workers gain protection, so the actual effect must be assessed through jobs and household incomes rather than business costs alone.
 
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^2]
+### 4. Healthcare[^4]
 
-### 3. Labour and social protection
+Expanding health-insurance coverage without matching funding may lead to longer waits and overdue payments to providers. Uniform prices restrict competition between pharmacies; any assessment must also consider whether rural outlets can continue operating.
 
-High mandatory premiums and shorter fixed-term contracts can raise the cost of formal employment, especially for small firms.
+### 5. Schools and early education[^5]
 
-Social protection helps recipients, so both net household income and employment must be examined.
+Higher teacher pay and a spending floor create long-term fiscal obligations. More spending will not necessarily improve teaching if procurement and staffing remain weak. Free textbooks and inclusive education also require trained staff and effective purchasing.
 
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^3]
+### 6. Universities and research[^6]
 
-### 4. Healthcare
+Greater academic autonomy may replace party influence with closed networks of faculty and administrators. Free tuition is not yet a firm promise: the programme only proposes considering it. If tuition is eventually removed, universities will need other funds to replace the revenue.
 
-Expanding covered services without matching funding may increase waiting lists and delayed reimbursement.
+### 7. Agriculture[^7]
 
-Uniform medicine prices limit price competition; outcomes depend on pharmacy margins and rural access.
+Large producers are often better placed to apply for subsidies, while restrictions on selling farmland can discourage investors. Warehouse-backed loans depend on reliable records of actual produce. Irrigation plans also need to account for water scarcity.
 
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^4]
+### 8. Foreign policy[^8]
 
-### 5. School education
+Military neutrality requires funding defence without collective security guarantees. Maintaining relationships with partners whose interests conflict can complicate investment and diplomacy. The cost of refusing sanctions on Russia also depends on how banks and trading partners respond.
 
-Higher teacher pay and spending floors create lasting budget commitments without guaranteeing learning improvements.
+### 9. Defence[^9]
 
-Free textbooks and inclusion require good procurement and sufficient trained staff.
+Higher military wages and volunteer training carry ongoing costs. Without a larger budget they can crowd out equipment maintenance. Procurement investigations need safeguards so that oversight does not become political punishment.
 
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^5]
+### 10. Mining and geology[^10]
 
-### 6. Universities and science
+New permits and repeated resource assessments can delay the opening of mines. Local participation is valuable, but its rules and deadlines must be clear if developers are to estimate the time and cost of a project.
 
-Academic autonomy can replace political interference with closed internal patronage.
+### 11. Energy[^11]
 
-Tuition abolition is only being considered; any implementation depends on replacing lost university revenue.
+Public energy companies leave investment losses on the state balance sheet. Maintaining coal plants while building gas links and renewable capacity may raise costs faster than revenues. Subsidised household solar also needs a grid capable of handling additional generation.
 
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^6]
+### 12. Culture[^12]
 
-### 7. Agriculture
+A guaranteed culture budget says little about how useful the funded projects will be. TV content quotas give regulators discretion to decide what counts as culture. Licensing copyrighted material for AI training may be especially costly for smaller developers.
 
-Large producers may capture subsidies, while restrictions on land transfers can deter investment.
+### 13. National minorities[^13]
 
-Warehouse receipts require verification of stock, and irrigation must reflect water scarcity.
+More minority-language services require translators, staff and system maintenance. Those costs can improve access to public services. Councils distributing minority support nevertheless need clear accountability for how they use funds.
 
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^7]
+### 14. Media[^14]
 
-### 8. Foreign policy
+Limits on reality TV and reviews of broadcast licences give regulators tools that could be used selectively. The same programme calls for disclosing media ownership and state advertising, which could reduce hidden political relationships. How independent the regulator is will matter.
 
-Military neutrality and balancing partners with conflicting interests have defence and diplomatic costs.
+### 15. Justice, policing and elections[^15]
 
-The effects of declining sanctions on Russia depend in part on counterparties' compliance rules.
+A special prosecution police and lustration rules could become political tools without independent courts and meaningful appeals. Greater protection from foreclosure changes lenders' risks, while replacing national identity numbers requires substantial database work. Any new electoral districts need safeguards against manipulation.
 
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^8]
+### 16. Gender equality and families[^16]
 
-### 9. Defence
+Pay transparency can narrow a wage gap partly by slowing wage growth for some employees. Families seeking extended parental leave would need fathers to take 182 days, affecting choices about income and work. The proposed menstrual leave has no specified duration or pay, so its cost cannot yet be calculated.
 
-Military wages and voluntary service can crowd out equipment maintenance.
+### 17. Environment[^17]
 
-Procurement scrutiny needs due process so investigations do not become tools of political discipline.
+New environmental funds and inspections add cost and can slow projects. Closing coal capacity before alternatives are ready could threaten power supply. Reliable public pollution measurements, however, can help hold both businesses and regulators to account.
 
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^9]
+### 18. Sport[^18]
 
-### 10. Mining
+Sports vouchers benefit children only where clubs have capacity. Where places are scarce, subsidies may simply raise prices. Coach licences and limits on fees should not make it impossible for small clubs to operate.
 
-Further permits and impact assessments may delay mining projects.
+### 19. Tourism[^19]
 
-Local participation needs a clear decision procedure to limit unpredictable investment delays.
+Tourism vouchers may inflate prices in already popular destinations. Registering short-term rentals adds costs for individual owners, while compulsory paid placements could lead some employers to offer fewer training places.
 
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^10]
+### 20. Students and young people[^20]
 
-### 11. Energy
+Scholarships, subsidised meals and summer access to student housing all require more funding. Student plenums can be dominated by active minorities unless representation is clear. Paid internships may be fairer to students but reduce the number of places offered.
 
-State utilities retain fiscal risks, and financing legacy fossil generation alongside alternatives is costly.
+## Gender policy: what the evidence shows
 
-Household solar subsidies also require grid upgrades and fair cost allocation.
+In Denmark, mandatory gender pay reporting narrowed the pay gap by roughly **two percentage points**, largely because male wages grew more slowly. That finding concerns Danish firms, not a forecast for Serbia.[^26]
 
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^11]
-
-### 12. Culture
-
-A fixed culture budget share does not guarantee quality or demand.
-
-Broadcast content quotas create editorial discretion, while AI-training licences may disadvantage small developers.
-
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^12]
-
-### 13. National minorities
-
-More minority-language services increase translation and operating costs.
-
-Minority councils need oversight to avoid becoming channels of patronage.
-
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^13]
-
-### 14. Media
-
-Reality-TV limits and broadcasting licence reviews can allow selective pressure.
-
-Ownership and public-advertising transparency can also reduce concealed political ties.
-
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^14]
-
-### 15. Justice, policing and elections
-
-A new prosecution police, lustration and electoral rules require judicial independence and appeal rights to prevent selective enforcement.
-
-Home foreclosure protection affects credit costs and replacing national IDs carries major migration risks.
-
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^15]
-
-### 16. Gender equality, family and health
-
-Pay transparency can narrow measured wage gaps partly by slowing some pay growth.
-
-Conditioning additional parental leave on fathers taking 182 days changes family choices; menstrual leave is not specified in days or payment.
-
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^16]
-
-### 17. Environment
-
-New environmental funds and inspections add procedures; an inadequately planned power transition can threaten supply.
-
-Transparent pollution measurements help accountability when sensors and enforcement are reliable.
-
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^17]
-
-### 18. Sport
-
-Sports vouchers may increase club prices where capacity is scarce.
-
-Coach licensing and regulated fees can disproportionately burden small clubs.
-
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^18]
-
-### 19. Tourism
-
-Tourism vouchers may be passed into prices; short-let registrations add compliance costs.
-
-Mandatory paid placements may reduce training openings.
-
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^19]
-
-### 20. Students and youth
-
-Student subsidies and summer residence access require extra funding.
-
-Plenums need clear representation rules, and mandatory paid internships may reduce employer placements.
-
-These are editorial hypotheses; see the [programme](/en/materials/studentska-lista-program-2026/) for exact proposals and limitations.[^20]
-
-## Gender policy: empirical findings and untested risks
-
-A Danish study of mandatory gender pay transparency found a roughly **two-percentage-point** narrowing of the pay gap, mainly through slower male wage growth. This finding concerns Denmark and **does not predict a Serbian outcome**.[^26]
-
-The proposed parental-leave extension depends on fathers taking **at least 182 days**, with tailored arrangements envisaged for entrepreneurs and farmers. The menstrual leave proposal specifies neither duration nor pay. Public childcare and care services might increase labour participation but entail budget costs.[^16]
-
-The net effect of the package cannot be inferred without estimating each measure separately.
-
-## Fiscal policy, monetary financing and inflation conditions
-
-The IMF's June 2026 assessment described Serbia's public debt as moderate, its reserves as adequate and the fiscal deficit framework as capped at **3% of GDP**.[^21] Spending commitments do not by themselves cause hyperinflation. That scenario requires additional conditions such as persistent deficits, financing constraints, monetary accommodation and loss of currency confidence. The programme does not explicitly propose printing money to cover spending.[^23]
-
-## The Argentina analogy: documented facts
-
-Argentina experienced strict hyperinflation in **1989–1990**. In December 2023, consumer prices rose **25.5% in one month**, reaching **211.4% year-on-year**. That month includes the change of government on 10 December and its initial policy response, so the reading is not purely a “pre-Milei” measurement.[^24][^25]
-
-The IMF associated Argentina's crisis with fiscal deficits, monetary financing and currency restrictions. Those mechanisms must be demonstrated rather than assumed for Serbia.[^23] See [Argentina: the 1989–1990 hyperinflations and the 2023 price crisis](/en/materials/argentina-inflation-crises-1989-2023/).
-
-## Measures that would remove administrative barriers
-
-The programme would **abolish some entry-needs tests and quotas**, reduce duplicate reporting, publish procurement information and examine new rules for competitive effects.[^1] These could reduce discretion. Not every measure therefore increases state control; the net outcome depends on the detailed rules and enforcement.
-
-## What additional evidence would test the scenarios
-
-Necessary tests include a multi-year budget, small-firm compliance-cost estimates, new-business entry and employment effects, independent due process for lustration, government IT risks and monetary-fiscal scenarios. These are **needed assessments**, not calculations already found in the programme.
-
-Evidence against the adverse scenarios would include sustainable funding, predictable appeals, lower compliance costs, healthy entry and investment and improved public services at comparable cost.
-
-## Sources and evidential limits
-
-[^1]: **Document · list proposal, not an observed outcome** — [Экономика, налоги и финансы](https://gg.studenti.org.rs/lat/program/privreda-i-finansije/), accessed 14.11.2026.
-[^2]: **Document · list proposal, not an observed outcome** — [Инфраструктура, жильё, транспорт, связь и информационные технологии](https://gg.studenti.org.rs/lat/program/infrastruktura/), accessed 14.11.2026.
-[^3]: **Document · list proposal, not an observed outcome** — [Труд и социальная защита](https://gg.studenti.org.rs/lat/program/rad-i-socijalna-pitanja/), accessed 14.11.2026.
-[^4]: **Document · list proposal, not an observed outcome** — [Здравоохранение](https://gg.studenti.org.rs/lat/program/zdravstvo/), accessed 14.11.2026.
-[^5]: **Document · list proposal, not an observed outcome** — [Школьное и дошкольное образование](https://gg.studenti.org.rs/lat/program/prosveta/), accessed 14.11.2026.
-[^6]: **Document · list proposal, not an observed outcome** — [Университеты и наука](https://gg.studenti.org.rs/lat/program/visoko-obrazovanje-i-nauka/), accessed 14.11.2026.
-[^7]: **Document · list proposal, not an observed outcome** — [Сельское хозяйство](https://gg.studenti.org.rs/lat/program/poljoprivreda/), accessed 14.11.2026.
-[^8]: **Document · list proposal, not an observed outcome** — [Внешняя политика](https://gg.studenti.org.rs/lat/program/spoljni-poslovi/), accessed 14.11.2026.
-[^9]: **Document · list proposal, not an observed outcome** — [Оборона](https://gg.studenti.org.rs/lat/program/odbrana/), accessed 14.11.2026.
-[^10]: **Document · list proposal, not an observed outcome** — [Рударство и геология](https://gg.studenti.org.rs/lat/program/rudarstvo-i-geologija/), accessed 14.11.2026.
-[^11]: **Document · list proposal, not an observed outcome** — [Энергетика](https://gg.studenti.org.rs/lat/program/energetika/), accessed 14.11.2026.
-[^12]: **Document · list proposal, not an observed outcome** — [Культура](https://gg.studenti.org.rs/lat/program/kultura/), accessed 14.11.2026.
-[^13]: **Document · list proposal, not an observed outcome** — [Национальные меньшинства](https://gg.studenti.org.rs/lat/program/manjinska-pitanja/), accessed 14.11.2026.
-[^14]: **Document · list proposal, not an observed outcome** — [СМИ](https://gg.studenti.org.rs/lat/program/mediji-i-informisanje/), accessed 14.11.2026.
-[^15]: **Document · list proposal, not an observed outcome** — [Правосудие, полиция и выборы](https://gg.studenti.org.rs/lat/program/pravosudje-policija-i-izborni-uslovi/), accessed 14.11.2026.
-[^16]: **Document · list proposal, not an observed outcome** — [Гендерное равенство, семья и репродуктивное здоровье](https://gg.studenti.org.rs/lat/program/rodna-ravnopravnost/), accessed 14.11.2026.
-[^17]: **Document · list proposal, not an observed outcome** — [Экология](https://gg.studenti.org.rs/lat/program/zastita-zivotne-sredine/), accessed 14.11.2026.
-[^18]: **Document · list proposal, not an observed outcome** — [Спорт](https://gg.studenti.org.rs/lat/program/sport/), accessed 14.11.2026.
-[^19]: **Document · list proposal, not an observed outcome** — [Туризм](https://gg.studenti.org.rs/lat/program/turizam/), accessed 14.11.2026.
-[^20]: **Document · list proposal, not an observed outcome** — [Студенты и молодёжь](https://gg.studenti.org.rs/lat/program/studentska-i-omladinska-pitanja/), accessed 14.11.2026.
-[^21]: **Publication · Serbia's June 2026 macroeconomic baseline and risks** — [IMF, Serbia: Third Review under the Policy Coordination Instrument, 15 June 2026](https://www.imf.org/en/news/articles/2026/06/15/pr26201-serbia-imf-concludes-the-third-review-under-pci).
-[^22]: **Publication · international evidence on compliance costs** — [OECD, Smart Regulations, Strong Business: Regulatory Burden and Complexity, 2026](https://www.oecd.org/en/publications/smart-regulations-strong-business_93d38770-en/full-report/diagnostic-drivers-of-regulatory-burden-and-complexity_7296019b.html).
-[^23]: **Publication · IMF assessment of Argentina's fiscal and monetary imbalances** — [IMF, Argentina, Seventh Review under the EFF, Country Report 24/37, February 2024](https://www.imf.org/-/media/files/publications/cr/2024/english/1argea2024001.pdf).
-[^24]: **Document · Argentina's official consumer price indices for November and December 2023** — [INDEC, Índice de precios al consumidor, diciembre 2023, published 11 January 2024](https://www.indec.gob.ar/uploads/informesdeprensa/ipc_01_24DBD5D8158C.pdf).
-[^25]: **Publication · authored historical research on hyperinflation, not an official central-bank position** — [Ariel Coremberg, Knocking on Hell's Door: 2023 and Argentina's hyperinflation history, Ensayos Económicos 86, 2025](https://www.investigacioneseconomicas.bcra.gob.ar/ensayos_economicos_bcra/article/download/689/593/706).
-[^26]: **Publication · Denmark pay-transparency study, not Serbian policy outcome** — [Bennedsen, Simintzi, Tsoutsoura and Wolfenzon, Do Firms Respond to Gender Pay Gap Transparency?, Journal of Finance 77, 2022](https://doi.org/10.1111/jofi.13136).
+Under the Student List proposal, fathers would have to take at least **182 days** of parental leave for families to obtain an extension to 547 days. The programme mentions tailored rules for entrepreneurs and farmers. Menstrual leave, meanwhile, has no specified duration or pay. Public care services may help parents work, but they also cost money.[^16] These measures cannot sensibly be assigned one net effect without separate estimates.
+
+## The fiscal question and Argentina
+
+In June 2026 the IMF described Serbia's debt as moderate, its reserves as adequate and its fiscal framework as limiting the deficit to **3% of GDP**.[^21] New commitments could widen deficits if they lack funding, but they do not automatically cause hyperinflation. That would require further developments: persistently large deficits, growing difficulty financing them and declining confidence in the currency. The Student List does not explicitly propose printing money to cover the costs.
+
+Argentina experienced hyperinflation in **1989–1990**. In December 2023 its consumer prices rose **25.5% during the month** and **211.4% year-on-year**. Javier Milei took office on **10 December**, so the monthly figure spans a change of government.[^24][^25] The IMF cited fiscal deficits, monetary financing and foreign-exchange controls among the country's economic imbalances.[^23] Our [Argentina background article](/en/materials/argentina-inflation-crises-1989-2023/) explains why those mechanisms should not simply be projected onto Serbia.
+
+## Proposals that remove red tape
+
+The list also proposes abolishing some needs tests and entry quotas, reducing duplicate paperwork and assessing new regulations for their impact on competition.[^1] Those changes could make it easier to start and run a business. Other proposals would increase state involvement; the overall result is not established.
+
+## What would test these risks
+
+A multi-year budget and estimates of compliance costs for small firms come first. Employment data would test labour-market effects. Lustration needs independent appeals; the IT programme needs migration and outage assessments. Evidence of sustained investment, business entry and better services at reasonable cost would weaken several of the adverse scenarios. This analysis cannot substitute for those measurements.
+
+## Sources
+
+[^1]: **Student List programme, 2026** — [Economy and finance](https://gg.studenti.org.rs/lat/program/privreda-i-finansije/).
+[^2]: **Student List programme, 2026** — [Infrastructure and transport](https://gg.studenti.org.rs/lat/program/infrastruktura/).
+[^3]: **Student List programme, 2026** — [Labour and social affairs](https://gg.studenti.org.rs/lat/program/rad-i-socijalna-pitanja/).
+[^4]: **Student List programme, 2026** — [Healthcare](https://gg.studenti.org.rs/lat/program/zdravstvo/).
+[^5]: **Student List programme, 2026** — [School education](https://gg.studenti.org.rs/lat/program/prosveta/).
+[^6]: **Student List programme, 2026** — [Higher education and research](https://gg.studenti.org.rs/lat/program/visoko-obrazovanje-i-nauka/).
+[^7]: **Student List programme, 2026** — [Agriculture](https://gg.studenti.org.rs/lat/program/poljoprivreda/).
+[^8]: **Student List programme, 2026** — [Foreign affairs](https://gg.studenti.org.rs/lat/program/spoljni-poslovi/).
+[^9]: **Student List programme, 2026** — [Defence](https://gg.studenti.org.rs/lat/program/odbrana/).
+[^10]: **Student List programme, 2026** — [Mining and geology](https://gg.studenti.org.rs/lat/program/rudarstvo-i-geologija/).
+[^11]: **Student List programme, 2026** — [Energy](https://gg.studenti.org.rs/lat/program/energetika/).
+[^12]: **Student List programme, 2026** — [Culture](https://gg.studenti.org.rs/lat/program/kultura/).
+[^13]: **Student List programme, 2026** — [Minority affairs](https://gg.studenti.org.rs/lat/program/manjinska-pitanja/).
+[^14]: **Student List programme, 2026** — [Media and information](https://gg.studenti.org.rs/lat/program/mediji-i-informisanje/).
+[^15]: **Student List programme, 2026** — [Justice, police and electoral rules](https://gg.studenti.org.rs/lat/program/pravosudje-policija-i-izborni-uslovi/).
+[^16]: **Student List programme, 2026** — [Gender equality](https://gg.studenti.org.rs/lat/program/rodna-ravnopravnost/).
+[^17]: **Student List programme, 2026** — [Environmental protection](https://gg.studenti.org.rs/lat/program/zastita-zivotne-sredine/).
+[^18]: **Student List programme, 2026** — [Sport](https://gg.studenti.org.rs/lat/program/sport/).
+[^19]: **Student List programme, 2026** — [Tourism](https://gg.studenti.org.rs/lat/program/turizam/).
+[^20]: **Student List programme, 2026** — [Students and youth](https://gg.studenti.org.rs/lat/program/studentska-i-omladinska-pitanja/).
+[^21]: **Publication · Serbia's economic baseline** — [IMF, Serbia: Third Review under the Policy Coordination Instrument, 15 June 2026](https://www.imf.org/en/news/articles/2026/06/15/pr26201-serbia-imf-concludes-the-third-review-under-pci).
+[^22]: **Research · regulatory compliance costs** — [OECD, Smart Regulations, Strong Business: Regulatory Burden and Complexity, 2026](https://www.oecd.org/en/publications/smart-regulations-strong-business_93d38770-en/full-report/diagnostic-drivers-of-regulatory-burden-and-complexity_7296019b.html).
+[^23]: **Publication · Argentina's fiscal and monetary policy** — [IMF, Argentina, Seventh Review under the EFF, Country Report 24/37, February 2024](https://www.imf.org/-/media/files/publications/cr/2024/english/1argea2024001.pdf).
+[^24]: **Document · Argentina's consumer price index** — [INDEC, Índice de precios al consumidor, diciembre 2023, published 11 January 2024](https://www.indec.gob.ar/uploads/informesdeprensa/ipc_01_24DBD5D8158C.pdf).
+[^25]: **Research · Argentine inflation history** — [Ariel Coremberg, Knocking on Hell's Door: 2023 and Argentina's hyperinflation history, Ensayos Económicos 86, 2025](https://www.investigacioneseconomicas.bcra.gob.ar/ensayos_economicos_bcra/article/download/689/593/706).
+[^26]: **Research · pay transparency in Denmark** — [Bennedsen, Simintzi, Tsoutsoura and Wolfenzon, Do Firms Respond to Gender Pay Gap Transparency?, Journal of Finance 77, 2022](https://doi.org/10.1111/jofi.13136).
