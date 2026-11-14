@@ -1,5 +1,5 @@
 ---
-title: Исторический архив Белграда: история партий
+title: "Исторический архив Белграда: история партий"
 description: Выставочная публикация по истории сербских партий
 entity: source
 entityId: source:archive-serbian-party-history
