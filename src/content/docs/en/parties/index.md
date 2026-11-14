@@ -9,6 +9,7 @@ This is an initial set of sourced profiles, not an exhaustive national register.
 
 ## Parties explicitly named in the 2026 electoral lists
 
+- [Serbian Progressive Party](/en/parties/srpska-napredna-stranka/)
 - [Socialist Party of Serbia](/en/parties/socijalisticka-partija-srbije/)
 - [United Serbia](/en/parties/jedinstvena-srbija/)
 - [Social Democratic Party of Serbia](/en/parties/socijaldemokratska-partija-srbije/)
@@ -28,7 +29,6 @@ This is an initial set of sourced profiles, not an exhaustive national register.
 
 ## Other parties in the election commission's directory
 
-- [Serbian Progressive Party](/en/parties/srpska-napredna-stranka/)
 - [Democratic Party](/en/parties/demokratska-stranka/)
 - [Serbian Radical Party](/en/parties/srpska-radikalna-stranka/)
 - [Dveri Movement](/en/parties/srpski-pokret-dveri/)
