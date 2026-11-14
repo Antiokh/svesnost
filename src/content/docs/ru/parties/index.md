@@ -9,6 +9,8 @@ sidebar:
 
 [История партийной системы Сербии, 1990–2026](/ru/materials/serbian-parties-1990-2026/) · [Официальный реестр](https://upit.rps.gov.rs/Home/GetPDFReport)
 
+**О дате источника:** реестр повторно проверен 14.11.2026; страницы актуальной выписки помечены обновлением 12.11.2026. В отдельных карточках сохранена дата предыдущей проверки 31.10.2026; современные названия следует сверять с новым реестром.
+
 ## Партии, возникшие или впервые зарегистрированные в 1990–1999 годах
 
 - [Демократическая партия](/ru/parties/demokratska-stranka/) — 1990-02-03
@@ -31,7 +33,7 @@ sidebar:
 - [Единая Сербия](/ru/parties/jedinstvena-srbija/) — 2004-02-18
 - [Движение свободных граждан](/ru/parties/pokret-slobodnih-gradjana/) — 2005-04-25
 - [Либерально-демократическая партия](/ru/parties/liberalno-demokratska-partija/) — 2005-11-05
-- [Партия объединённых пенсионеров Сербии](/ru/parties/partija-ujedinjenih-penzionera-srbije/) — 2005-05-10
+- [ПУПС — Солидарность и справедливость](/ru/parties/partija-ujedinjenih-penzionera-srbije/) — 2005-05-10
 - [Зелёные Сербии](/ru/parties/zeleni-srbije/) — 2007-11-17
 - [Движение социалистов](/ru/parties/pokret-socijalista/) — 2008-07-17
 - [Партия свободы и справедливости](/ru/parties/stranka-slobode-i-pravde/) — 2008-02-05

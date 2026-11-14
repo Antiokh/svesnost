@@ -1,11 +1,15 @@
 ---
-title: "Party of United Pensioners of Serbia"
+title: "PUPS — Solidarity and Justice"
 description: "Political party; 2005-05-10; 1990–2026"
 sidebar:
   order: 10
 ---
 
-**Party of United Pensioners of Serbia** — political party. A source-based introductory profile for the 1990–2026 period. Complete leadership histories, party programmes and membership records have not been established, and this entry remains open for further documented research.
+**PUPS — Solidarity and Justice** (раније: Party of United Pensioners of Serbia) — political party. A source-based introductory profile for the 1990–2026 period. Complete leadership histories, party programmes and membership records have not been established, and this entry remains open for further documented research.
+
+## Current and former names
+
+**Name in the current register (checked 14 November 2026):** *Party of United Pensioners, Farmers and Proletarians of Serbia — Solidarity and Justice* (PUPS — Solidarity and Justice). The earlier name *Party of United Pensioners of Serbia* is retained as a historical/common name. The live register extract shows an update of 12 November 2026.
 
 ## Official party-register record
 

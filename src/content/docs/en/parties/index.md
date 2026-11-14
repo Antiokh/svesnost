@@ -9,6 +9,8 @@ This is a selection of significant or well-documented organisations, not the ful
 
 [Serbia's party system, 1990–2026](/en/materials/serbian-parties-1990-2026/) · [Official party register](https://upit.rps.gov.rs/Home/GetPDFReport)
 
+**Source date:** the register was rechecked on 14 November 2026; its current pages show a 12 November 2026 update. Individual profiles may cite the earlier 31 October snapshot, so current names should be checked against the newer extract.
+
 ## Parties founded or originally registered in 1990–1999
 
 - [Democratic Alliance of Croats in Vojvodina](/en/parties/demokratski-savez-hrvata-u-vojvodini/) — 1990-07-15
@@ -31,7 +33,7 @@ This is a selection of significant or well-documented organisations, not the ful
 - [United Serbia](/en/parties/jedinstvena-srbija/) — 2004-02-18
 - [Liberal Democratic Party](/en/parties/liberalno-demokratska-partija/) — 2005-11-05
 - [Movement of Free Citizens](/en/parties/pokret-slobodnih-gradjana/) — 2005-04-25
-- [Party of United Pensioners of Serbia](/en/parties/partija-ujedinjenih-penzionera-srbije/) — 2005-05-10
+- [PUPS — Solidarity and Justice](/en/parties/partija-ujedinjenih-penzionera-srbije/) — 2005-05-10
 - [Greens of Serbia](/en/parties/zeleni-srbije/) — 2007-11-17
 - [Movement of Socialists](/en/parties/pokret-socijalista/) — 2008-07-17
 - [Party of Freedom and Justice](/en/parties/stranka-slobode-i-pravde/) — 2008-02-05

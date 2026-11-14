@@ -9,6 +9,8 @@ sidebar:
 
 [Историјски преглед партијског система 1990–2026](/materials/serbian-parties-1990-2026/) · [Оригинални државни регистар](https://upit.rps.gov.rs/Home/GetPDFReport)
 
+**Напомена о датуму:** актуелни извод регистра прегледан 14.11.2026. на страницама носи датум ажурирања 12.11.2026. Појединачне картице могу бележити ранију проверу од 31.10.2026; за садашње називе проверити новији извод.
+
 ## Странке основане или изворно регистроване 1990–1999
 
 - [Демократска странка](/parties/demokratska-stranka/) — 1990-02-03
@@ -30,7 +32,7 @@ sidebar:
 - [Јединствена Србија](/parties/jedinstvena-srbija/) — 2004-02-18
 - [Покрет Снага Србије — БК](/parties/pokret-snaga-srbije/) — 2004-05-20
 - [Либерално-демократска партија](/parties/liberalno-demokratska-partija/) — 2005-11-05
-- [Партија уједињених пензионера Србије](/parties/partija-ujedinjenih-penzionera-srbije/) — 2005-05-10
+- [ПУПС — Солидарност и правда](/parties/partija-ujedinjenih-penzionera-srbije/) — 2005-05-10
 - [Покрет слободних грађана](/parties/pokret-slobodnih-gradjana/) — 2005-04-25
 - [Зелени Србије](/parties/zeleni-srbije/) — 2007-11-17
 - [Покрет социјалиста](/parties/pokret-socijalista/) — 2008-07-17

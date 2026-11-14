@@ -13,7 +13,7 @@ sourceRefs:
 
 ## Documented political links
 
-- **[Party of United Pensioners of Serbia](/en/parties/partija-ujedinjenih-penzionera-srbije/)** — listed as registered representative, register dated 31 October 2026.[^1]
+- **[PUPS — Solidarity and Justice](/en/parties/partija-ujedinjenih-penzionera-srbije/)** — listed as registered representative, register dated 31 October 2026.[^1]
 
 This is a preliminary source-based biographical profile, not a complete life history. Being recorded as a registered party representative does not, on its own, establish the office of party president.
 
