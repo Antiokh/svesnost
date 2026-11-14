@@ -49,6 +49,8 @@ Dates refer to the events rather than merely the publication of sources; a geogr
 Policy articles retain links to primary documents and distinguish promises from their implementation.
 
 - [Student List programme (2026)](/en/materials/studentska-lista-program-2026/)
+- [Economic and institutional risks of Student List reforms](/en/materials/studentska-lista-economic-risks-2026/)
+- [Argentina: 1989–1990 hyperinflation and the 2023 crisis](/en/materials/argentina-inflation-crises-1989-2023/)
 - [Articles and analysis](/en/materials/)
 
 - [Serbian parties since Yugoslavia's dissolution (1990–2026)](/en/materials/serbian-parties-1990-2026/)
