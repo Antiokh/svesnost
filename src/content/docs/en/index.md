@@ -51,6 +51,8 @@ Policy articles retain links to primary documents and distinguish promises from 
 - [Student List programme (2026)](/en/materials/studentska-lista-program-2026/)
 - [Articles and analysis](/en/materials/)
 
+- [Serbian parties since Yugoslavia's dissolution (1990–2026)](/en/materials/serbian-parties-1990-2026/)
+
 ## Sources and method
 
 Svesnost is an independent encyclopedia of politics and society. Serbian Cyrillic is the primary edition; Russian and English are independent editorial versions.
