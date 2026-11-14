@@ -1,21 +1,45 @@
 ---
-title: Democratic Party
-description: Political party; The party appears in the Republic Electoral Commission's party directory, which is not a dated register of currently active parties
+title: "Democratic Party"
+description: "Political party; 1990-02-03; 1990–2026"
 sidebar:
-  order: 20
+  order: 10
 ---
 
-**Democratic Party** (DS) — political party. An initial source-based party profile. This is **not** a complete history or an independent verification of current registration or leadership.
+**Democratic Party** — political party. A source-based introductory profile for the 1990–2026 period. Complete leadership histories, party programmes and membership records have not been established, and this entry remains open for further documented research.
 
-## Documentary status
+## Official party-register record
 
-The party appears in the Republic Electoral Commission's party directory, which is not a dated register of currently active parties. Participation by this party in the 2026 parliamentary election is not independently established here.[^1]
+Foundation date recorded in the register: **1990-02-03**.[^1]
 
-## Related material
+The foundation date of a registered legal entity may differ from when it adopted its present name. Registration does not prove participation in a given election, and a legal representative is not necessarily the party president.
 
-- [Political parties](/en/parties/)
-- [State party register](https://upit.rps.gov.rs/)
+## Leaders and significant figures
 
-[^1]: **Document / publication · limited to a directory listing** — [Electoral Commission: political-party directory](https://www.rik.parlament.gov.rs/tekst/sr/101/politicke-stranke.php); the page does not specify an update date. 
+- [Srđan Milivojević](/en/persons/srdjan-milivojevic/) — Person recorded as the **legal representative** in the official register (31.10.2026).[^2]
+- [Dragoljub Mićunović](/en/persons/dragoljub-micunovic/) — Founder or co-founder.[^3]
+- [Zoran Đinđić](/en/persons/zoran-djindjic/) — Former party leader.[^4]
+- [Boris Tadić](/en/persons/boris-tadic/) — Former party leader.[^5]
 
-The interwar Yugoslav Democratic Party is documented separately: [historical profile](/en/parties/demokratska-stranka-jugoslavije/).
+## Related organisations
+
+These links provide starting points to examine splits, cooperation and renaming. They do not on their own establish legal succession or an alliance.
+
+- [New Democratic Party of Serbia](/en/parties/nova-demokratska-stranka-srbije/)
+- [Liberal Democratic Party](/en/parties/liberalno-demokratska-partija/)
+- [Social Democratic Party](/en/parties/socijaldemokratska-stranka/)
+
+- [First multiparty election, 1990](/en/events/first-multiparty-election-1990/)
+
+- [5 October 2000](/en/events/october-5-2000/)
+
+## Coalitions and joint electoral lists
+
+- [Democratic Opposition of Serbia (DOS), coalition in 2000](/en/coalitions/dos-2000/)
+
+## Sources
+
+[^1]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
+[^2]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
+[^3]: **Document / publication · source record** — [EU Conditionality in Serbia, CEU research, note 150–151](https://www.etd.ceu.edu/2011/weaver_stuart.pdf).
+[^4]: **Document / publication · source record** — [EU Conditionality in Serbia, CEU research, note 150–151](https://www.etd.ceu.edu/2011/weaver_stuart.pdf).
+[^5]: **Document / publication · source record** — [Hrvatska enciklopedija, Srbija, political parties](https://enciklopedija.hr/clanak/srbija).

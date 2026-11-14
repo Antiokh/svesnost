@@ -1,24 +1,42 @@
 ---
-title: Serbian Progressive Party
-description: Political party; submitted an electoral list in the 2026 parliamentary election
+title: "Serbian Progressive Party"
+description: "Political party; 2008-10-10; 1990–2026"
 sidebar:
   order: 10
 ---
 
-**Serbian Progressive Party (SNS)** — political party.
+**Serbian Progressive Party** — political party. A source-based introductory profile for the 1990–2026 period. Complete leadership histories, party programmes and membership records have not been established, and this entry remains open for further documented research.
 
-## Documented activity in the 2026 election
+## Official party-register record
 
-According to the Republic Electoral Commission's report on the 2026 parliamentary election, the **Serbian Progressive Party** submitted the “Aleksandar Vučić — United Serbia” electoral list. Submission of the list does not establish that every candidate or coalition partner was an SNS member.[^1]
+Foundation date recorded in the register: **2008-10-10**.[^1]
 
-The 103 seats reported in the final results belong to the **electoral list as a whole**, rather than an independently counted SNS party seat total.[^2]
+The foundation date of a registered legal entity may differ from when it adopted its present name. Registration does not prove participation in a given election, and a legal representative is not necessarily the party president.
 
-This is not the same legal organisation as the Progressive Party of 1881: [Historical party](/en/parties/napredna-stranka-1881/).
+## Leaders and significant figures
 
-## Related material
+- [Miloš Vučević](/en/persons/milos-vucevic/) — Person recorded as the **legal representative** in the official register (31.10.2026).[^2]
+- [Tomislav Nikolić](/en/persons/tomislav-nikolic/) — Founder or co-founder.[^3]
+- [Aleksandar Vučić](/en/persons/aleksandar-vucic/) — Founder or co-founder.[^4]
+
+## 2026 election
+
+The party was expressly listed within one of the certified electoral lists for Serbia's 25 October 2026 parliamentary election. Votes and seats were awarded to electoral lists, not allocated separately to each party in a coalition.[^5]
 
 - [2026 parliamentary election](/en/events/parliamentary-election-2026/)
-- [Political parties](/en/parties/)
 
-[^1]: **Document · confirmed list submitter** — [Electoral Commission, report on conduct of the elections](https://www.rik.parlament.gov.rs/extfile/sr/files/additionalDocuments/822/686/izvestaj.pdf), 6.11.2026, section on submitted electoral lists.
-[^2]: **Document · confirmed list result** — [2026 parliamentary election](https://www.rik.parlament.gov.rs/vest/sr/822434/75-sednica-republicke-izborne-komisije.php), 5.11.2026.
+## Related organisations
+
+These links provide starting points to examine splits, cooperation and renaming. They do not on their own establish legal succession or an alliance.
+
+- [Serbian Radical Party](/en/parties/srpska-radikalna-stranka/)
+
+- [SRS split and foundation of SNS, 2008](/en/events/sns-formation-2008/)
+
+## Sources
+
+[^1]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
+[^2]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
+[^3]: **Document / publication · source record** — [European Parliament Research Service, Serbian parties, 2015](https://www.europarl.europa.eu/RegData/etudes/ATAG/2015/565879/EPRS_ATA%282015%29565879_EN.pdf).
+[^4]: **Document / publication · source record** — [European Parliament Research Service, Serbian parties, 2015](https://www.europarl.europa.eu/RegData/etudes/ATAG/2015/565879/EPRS_ATA%282015%29565879_EN.pdf).
+[^5]: **Document / publication · source record** — [RIK, certified 2026 parliamentary electoral lists](https://www.rik.parlament.gov.rs/vest/en/4086/50th-session-of-the-republic-electoral-commission-.php), 8.10.2026.

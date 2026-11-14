@@ -1,19 +1,27 @@
 ---
-title: Party of United Pensioners of Serbia
-description: Political party; The party appears in the Republic Electoral Commission's party directory, which is not a dated register of currently active parties
+title: "PUPS — Solidarity and Justice"
+description: "Political party; 2005-05-10; 1990–2026"
 sidebar:
-  order: 20
+  order: 10
 ---
 
-**Party of United Pensioners of Serbia** (PUPS) — political party. An initial source-based party profile. This is **not** a complete history or an independent verification of current registration or leadership.
+**PUPS — Solidarity and Justice** (formerly the Party of United Pensioners of Serbia) — political party. A source-based introductory profile for the 1990–2026 period. Complete leadership histories, party programmes and membership records have not been established, and this entry remains open for further documented research.
 
-## Documentary status
+## Current and former names
 
-The party appears in the Republic Electoral Commission's party directory, which is not a dated register of currently active parties. Participation by this party in the 2026 parliamentary election is not independently established here.[^1]
+**Name in the current register (checked 14 November 2026):** *Party of United Pensioners, Farmers and Proletarians of Serbia — Solidarity and Justice* (PUPS — Solidarity and Justice). The earlier name *Party of United Pensioners of Serbia* is retained as a historical/common name. The live register extract shows an update of 12 November 2026.
 
-## Related material
+## Official party-register record
 
-- [Political parties](/en/parties/)
-- [State party register](https://upit.rps.gov.rs/)
+Foundation date recorded in the register: **2005-05-10**.[^1]
 
-[^1]: **Document / publication · limited to a directory listing** — [Electoral Commission: political-party directory](https://www.rik.parlament.gov.rs/tekst/sr/101/politicke-stranke.php); the page does not specify an update date. 
+The foundation date of a registered legal entity may differ from when it adopted its present name. Registration does not prove participation in a given election, and a legal representative is not necessarily the party president.
+
+## Leaders and significant figures
+
+- [Milan Krkobabić](/en/persons/milan-krkobabic/) — Person recorded as the **legal representative** in the official register (31.10.2026).[^2]
+
+## Sources
+
+[^1]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.
+[^2]: **Document / publication · source record** — [Извод из Регистра политичких странака](https://upit.rps.gov.rs/Home/GetPDFReport), 31.10.2026.

@@ -1,0 +1,1148 @@
+{
+  "reviewedAt": "2026-11-14",
+  "scope": "Selected Serbian political-party organisations from reintroduction of multiparty politics in 1990 through 2026. This is not the complete register. Party founding dates in register refer to registered entities and may predate current party name; representative does not establish party presidency.",
+  "sources": {
+    "reg": {
+      "url": "https://upit.rps.gov.rs/Home/GetPDFReport",
+      "name": "Извод из Регистра политичких странака",
+      "type": "document",
+      "date": "2026-10-31"
+    },
+    "crta": {
+      "url": "https://crta.plus/updates/who-has-held-power-in-serbia-1990-to-2026/",
+      "name": "Who has held power in Serbia, 1990 to 2026",
+      "type": "publication",
+      "date": "2026-10-02"
+    },
+    "history1990": {
+      "url": "https://etheses.lse.ac.uk/1883/1/U213438.pdf",
+      "name": "Belgrade in Transition, historical party-system study",
+      "type": "publication"
+    },
+    "historySerbia": {
+      "url": "https://enciklopedija.hr/clanak/srbija",
+      "name": "Hrvatska enciklopedija, Srbija, political parties",
+      "type": "publication"
+    },
+    "historyDS": {
+      "url": "https://www.etd.ceu.edu/2011/weaver_stuart.pdf",
+      "name": "EU Conditionality in Serbia, CEU research, note 150–151",
+      "type": "publication"
+    },
+    "ep2015": {
+      "url": "https://www.europarl.europa.eu/RegData/etudes/ATAG/2015/565879/EPRS_ATA%282015%29565879_EN.pdf",
+      "name": "European Parliament Research Service, Serbian parties, 2015",
+      "type": "publication"
+    },
+    "state2008": {
+      "url": "https://2009-2017.state.gov/outofdate/bgn/serbia/113122.htm",
+      "name": "U.S. Department of State, Serbia background note, December 2008",
+      "type": "document",
+      "date": "2008"
+    },
+    "tanjugPalma": {
+      "url": "https://www.tanjug.rs/srbija/politika/123769/dragan-markovic-palma-dugogodisnji-politicar-osnivac-jedinstvene-srbije/vest",
+      "name": "Tanjug on Dragan Marković Palma, 22 Nov 2024",
+      "type": "publication",
+      "date": "2024-11-22"
+    },
+    "rts2026": {
+      "url": "https://www.rts.rs/lat/vesti/politika/6011814/rasim-ljajic-presednik-ostavka-sdps.html",
+      "name": "RTS, Jug Radivojević succeeds Rasim Ljajić, 2 Aug 2026",
+      "type": "publication",
+      "date": "2026-08-02"
+    },
+    "krikZukorlic": {
+      "url": "https://imovinapoliticara.krik.rs/profil.php?id=97&ime=Usame-Zukorlic",
+      "name": "KRIK, Usame Zukorlić profile, updated June 2025",
+      "type": "publication",
+      "date": "2025-06-18"
+    },
+    "partySplits": {
+      "url": "https://www.tandfonline.com/doi/full/10.1080/14613190802146356",
+      "name": "Parties and the party system of Serbia and European integrations, 2008",
+      "type": "publication",
+      "date": "2008"
+    },
+    "ceuDOS": {
+      "url": "https://www.etd.ceu.edu/2008/nphpet01.pdf",
+      "name": "CEU political parties and leaders, historical analysis",
+      "type": "publication",
+      "date": "2008"
+    },
+    "partyLsv": {
+      "url": "https://lsv.rs/UserFiles/pdf/SV-117.pdf",
+      "name": "LSV party publication: 25 years of political activity, Nenad Čanak",
+      "type": "publication"
+    },
+    "otvoreniBosko": {
+      "url": "https://otvoreniparlament.rs/poslanik/9579",
+      "name": "Otvoreni parlament, Boško Obradović profile",
+      "type": "publication"
+    },
+    "otvoreniVulin": {
+      "url": "https://otvoreniparlament.rs/osoba/959",
+      "name": "Otvoreni parlament, Aleksandar Vulin profile",
+      "type": "publication",
+      "date": "2025-03-22"
+    },
+    "wpMira": {
+      "url": "https://www.washingtonpost.com/archive/lifestyle/1997/01/15/milosevics-mira-image/f10cc416-443b-4116-a92c-6c4a6de4ee9b/",
+      "name": "Washington Post, Mirjana Marković and JUL, 1997",
+      "type": "publication",
+      "date": "1997-01-15"
+    },
+    "istinomerSSJ": {
+      "url": "https://www.istinomer.rs/analize/razvojni-put-arkanove-stranke-od-erduta-preko-radikala-do-sns/",
+      "name": "Istinomer, history of Party of Serbian Unity",
+      "type": "publication"
+    },
+    "rik2026": {
+      "url": "https://www.rik.parlament.gov.rs/vest/en/4086/50th-session-of-the-republic-electoral-commission-.php",
+      "name": "RIK, certified 2026 parliamentary electoral lists",
+      "type": "document",
+      "date": "2026-10-08"
+    },
+    "ikt1992": {
+      "url": "https://ctr.irmct.org/en/about/what-former-yugoslavia",
+      "name": "ICTY/IRMCT, What is the former Yugoslavia?",
+      "type": "document"
+    },
+    "narodna2017": {
+      "url": "https://www.politika.rs/sr/clanak/391398/prepakivanje-stranaka",
+      "name": "Politika, 25 Oct 2017, legal transformation of Narodni pokret Srbije into Narodna stranka",
+      "type": "publication",
+      "date": "2017-10-25"
+    },
+    "rtsSDPS": {
+      "url": "https://www.rts.rs/lat/vesti/politika/6011814/rasim-ljajic-presednik-ostavka-sdps.html",
+      "name": "RTS, Rasim Ljajić and Jug Radivojević, 2 August 2026",
+      "type": "publication",
+      "date": "2026-08-02"
+    },
+    "officialgazette": {
+      "url": "https://slgl.pravno-informacioni-sistem.rs/api/Prins/viewAct/673504",
+      "name": "Službeni glasnik RS 13/2000, registry entries",
+      "type": "document",
+      "date": "2000-04-21"
+    }
+  },
+  "parties": [
+    [
+      "srpska-napredna-stranka",
+      "Српска напредна странка",
+      "Сербская прогрессивная партия",
+      "Serbian Progressive Party",
+      "2008-10-10",
+      "milos-vucevic",
+      "registered",
+      [
+        [
+          "tomislav-nikolic",
+          "founder",
+          "ep2015"
+        ],
+        [
+          "aleksandar-vucic",
+          "founder",
+          "ep2015"
+        ]
+      ],
+      [
+        "srpska-radikalna-stranka"
+      ]
+    ],
+    [
+      "socijalisticka-partija-srbije",
+      "Социјалистичка партија Србије",
+      "Социалистическая партия Сербии",
+      "Socialist Party of Serbia",
+      "1990-07-17",
+      "ivica-dacic",
+      "registered",
+      [
+        [
+          "slobodan-milosevic",
+          "historicalLeader",
+          "history1990"
+        ]
+      ],
+      [
+        "jugoslovenska-levica"
+      ]
+    ],
+    [
+      "jedinstvena-srbija",
+      "Јединствена Србија",
+      "Единая Сербия",
+      "United Serbia",
+      "2004-02-18",
+      "dalibor-markovic",
+      "registered",
+      [
+        [
+          "dragan-markovic-palma",
+          "founder",
+          "tanjugPalma"
+        ]
+      ],
+      []
+    ],
+    [
+      "socijaldemokratska-partija-srbije",
+      "Социјалдемократска партија Србије",
+      "Социал-демократическая партия Сербии",
+      "Social Democratic Party of Serbia",
+      "2001-08-31",
+      "jug-radivojevic",
+      "registered",
+      [
+        [
+          "rasim-ljajic",
+          "historicalLeader",
+          "rtsSDPS"
+        ]
+      ],
+      [
+        "sandzacka-demokratska-partija"
+      ]
+    ],
+    [
+      "zeleni-srbije",
+      "Зелени Србије",
+      "Зелёные Сербии",
+      "Greens of Serbia",
+      "2007-11-17",
+      "ivan-karic",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "savez-vojvodjanskih-madjara",
+      "Савез војвођанских Мађара",
+      "Союз воеводинских венгров",
+      "Alliance of Vojvodina Hungarians",
+      "1996-08-31",
+      "balint-pastor",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "stranka-pravde-i-pomirenja",
+      "Странка правде и помирења",
+      "Партия справедливости и примирения",
+      "Justice and Reconciliation Party",
+      "2013-08-14",
+      "usame-zukorlic",
+      "registered",
+      [
+        [
+          "muamer-zukorlic",
+          "historicalLeader",
+          "krikZukorlic"
+        ]
+      ],
+      []
+    ],
+    [
+      "ruska-stranka",
+      "Руска странка",
+      "Русская партия",
+      "Russian Party",
+      "2013-06-09",
+      "slobodan-nikolic",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "nova-demokratska-stranka-srbije",
+      "Нова демократска странка Србије",
+      "Новая демократическая партия Сербии",
+      "New Democratic Party of Serbia",
+      "1992-07-23",
+      "milos-jovanovic",
+      "registered",
+      [
+        [
+          "vojislav-kostunica",
+          "founder",
+          "historyDS"
+        ]
+      ],
+      [
+        "demokratska-stranka"
+      ]
+    ],
+    [
+      "pokret-obnove-kraljevine-srbije",
+      "Покрет обнове Краљевине Србије",
+      "Движение восстановления Королевства Сербия",
+      "Movement for Restoration of the Kingdom of Serbia",
+      "2017-06-18",
+      "vojislav-mihailovic",
+      "registered",
+      [],
+      [
+        "srpski-pokret-obnove"
+      ]
+    ],
+    [
+      "stranka-slobode-i-pravde",
+      "Странка слободе и правде",
+      "Партия свободы и справедливости",
+      "Party of Freedom and Justice",
+      "2008-02-05",
+      "dragan-djilas",
+      "registered",
+      [],
+      [
+        "demokratska-stranka"
+      ]
+    ],
+    [
+      "srbija-centar",
+      "Србија центар",
+      "Сербия Центр",
+      "Serbia Centre",
+      "2023-06-11",
+      "zdravko-ponos",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "sda-sandzaka",
+      "Странка демократске акције Санџака",
+      "Партия демократического действия Санджака",
+      "Party of Democratic Action of Sandžak",
+      "1996-08-21",
+      "sulejman-ugljanin",
+      "registered",
+      [],
+      [
+        "sandzacka-demokratska-partija"
+      ]
+    ],
+    [
+      "narodna-stranka",
+      "Народна странка",
+      "Народная партия",
+      "People's Party",
+      "2016-08-17",
+      "vladimir-gajic",
+      "registered",
+      [
+        [
+          "vuk-jeremic",
+          "historicalLeader",
+          "narodna2017"
+        ],
+        [
+          "miroslav-aleksic",
+          "formerMember",
+          "narodna2017"
+        ]
+      ],
+      [
+        "narodni-pokret-srbije"
+      ]
+    ],
+    [
+      "pokret-snaga-srbije",
+      "Покрет Снага Србије — БК",
+      "Движение «Сила Сербии — БК»",
+      "Strength of Serbia Movement — BK",
+      "2004-05-20",
+      "dragomir-karic",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "liberalno-zelena-stranka",
+      "Либерално зелена странка",
+      "Либерально-зелёная партия",
+      "Liberal Green Party",
+      "1997-05-07",
+      "dejan-zujovic",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "stranka-rusko-srpskog-jedinstva",
+      "Странка руско-српског јединства",
+      "Партия русско-сербского единства",
+      "Party of Russian–Serbian Unity",
+      "2026-08-09",
+      "rade-savic",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "demokratska-stranka",
+      "Демократска странка",
+      "Демократическая партия",
+      "Democratic Party",
+      "1990-02-03",
+      "srdjan-milivojevic",
+      "registered",
+      [
+        [
+          "dragoljub-micunovic",
+          "founder",
+          "historyDS"
+        ],
+        [
+          "zoran-djindjic",
+          "historicalLeader",
+          "historyDS"
+        ],
+        [
+          "boris-tadic",
+          "historicalLeader",
+          "historySerbia"
+        ]
+      ],
+      [
+        "nova-demokratska-stranka-srbije",
+        "liberalno-demokratska-partija",
+        "socijaldemokratska-stranka"
+      ]
+    ],
+    [
+      "srpska-radikalna-stranka",
+      "Српска радикална странка",
+      "Сербская радикальная партия",
+      "Serbian Radical Party",
+      "1991-02-23",
+      "vojislav-seselj",
+      "registered",
+      [
+        [
+          "tomislav-nikolic",
+          "formerMember",
+          "state2008"
+        ],
+        [
+          "aleksandar-vucic",
+          "formerMember",
+          "state2008"
+        ]
+      ],
+      [
+        "srpska-napredna-stranka"
+      ]
+    ],
+    [
+      "srpski-pokret-dveri",
+      "Српски покрет Двери",
+      "Сербское движение «Двери»",
+      "Dveri Movement",
+      "2015-06-27",
+      "ivan-kostic",
+      "registered",
+      [
+        [
+          "bosko-obradovic",
+          "historicalLeader",
+          "otvoreniBosko"
+        ]
+      ],
+      []
+    ],
+    [
+      "narodni-pokret-srbije",
+      "Народни покрет Србије",
+      "Народное движение Сербии",
+      "People's Movement of Serbia",
+      "2023-09-08",
+      "miroslav-aleksic",
+      "registered",
+      [],
+      [
+        "narodna-stranka"
+      ]
+    ],
+    [
+      "pokret-slobodnih-gradjana",
+      "Покрет слободних грађана",
+      "Движение свободных граждан",
+      "Movement of Free Citizens",
+      "2005-04-25",
+      "pavle-grbovic",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "partija-ujedinjenih-penzionera-srbije",
+      "Партија уједињених пензионера Србије",
+      "Партия объединённых пенсионеров Сербии",
+      "Party of United Pensioners of Serbia",
+      "2005-05-10",
+      "milan-krkobabic",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "srpski-pokret-obnove",
+      "Српски покрет обнове",
+      "Сербское движение обновления",
+      "Serbian Renewal Movement",
+      "1990-03-14",
+      "aleksandar-cvetkovic",
+      "registered",
+      [
+        [
+          "vuk-draskovic",
+          "founder",
+          "history1990"
+        ]
+      ],
+      [
+        "nova-srbija",
+        "pokret-obnove-kraljevine-srbije"
+      ]
+    ],
+    [
+      "zdrava-srbija",
+      "Здрава Србија",
+      "Здоровая Сербия",
+      "Healthy Serbia",
+      "2019-02-01",
+      "milan-stamatovic",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "liberalno-demokratska-partija",
+      "Либерално-демократска партија",
+      "Либерально-демократическая партия",
+      "Liberal Democratic Party",
+      "2005-11-05",
+      "cedomir-jovanovic",
+      "registered",
+      [],
+      [
+        "demokratska-stranka"
+      ]
+    ],
+    [
+      "liga-socijaldemokrata-vojvodine",
+      "Лига социјалдемократа Војводине — Војвођани",
+      "Лига социал-демократов Воеводины — Воеводинцы",
+      "League of Social Democrats of Vojvodina",
+      "1990-07-14",
+      "bojan-kostres",
+      "registered",
+      [
+        [
+          "nenad-canak",
+          "founder",
+          "partyLsv"
+        ]
+      ],
+      []
+    ],
+    [
+      "nova-srbija",
+      "Нова Србија",
+      "Новая Сербия",
+      "New Serbia",
+      "1998-08-10",
+      "stefan-marinkovic",
+      "registered",
+      [
+        [
+          "velimir-ilic",
+          "founder",
+          "partySplits"
+        ]
+      ],
+      [
+        "srpski-pokret-obnove"
+      ]
+    ],
+    [
+      "sandzacka-demokratska-partija",
+      "Санџачка демократска партија",
+      "Санджакская демократическая партия",
+      "Sandžak Democratic Party",
+      "1990-08-17",
+      "samir-lekic",
+      "registered",
+      [
+        [
+          "rasim-ljajic",
+          "founder",
+          "rts2026"
+        ]
+      ],
+      [
+        "sda-sandzaka",
+        "socijaldemokratska-partija-srbije"
+      ]
+    ],
+    [
+      "demokratski-savez-hrvata-u-vojvodini",
+      "Демократски савез Хрвата у Војводини",
+      "Демократический союз хорватов Воеводины",
+      "Democratic Alliance of Croats in Vojvodina",
+      "1990-07-15",
+      "tomislav-zigmanov",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "socijaldemokratska-stranka",
+      "Социјалдемократска странка",
+      "Социал-демократическая партия",
+      "Social Democratic Party",
+      "2014-07-18",
+      "boris-tadic",
+      "registered",
+      [],
+      [
+        "demokratska-stranka"
+      ]
+    ],
+    [
+      "zeleno-levi-front",
+      "Зелено-леви фронт",
+      "Зелёно-левый фронт",
+      "Green–Left Front",
+      "2023-07-14",
+      "biljana-djordjevic",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "srpska-stranka-zavetnici",
+      "Српска странка Заветници",
+      "Сербская партия «Заветники»",
+      "Serbian Party Oathkeepers",
+      "2019-06-04",
+      "milica-djurdjevic-stamenkovski",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "dosta-je-bilo",
+      "Доста је било",
+      "«Хватит уже»",
+      "Enough Is Enough",
+      "2022-01-27",
+      "sasa-radulovic",
+      "registered",
+      [],
+      []
+    ],
+    [
+      "pokret-socijalista",
+      "Покрет социјалиста",
+      "Движение социалистов",
+      "Movement of Socialists",
+      "2008-07-17",
+      "bojan-torbica",
+      "registered",
+      [
+        [
+          "aleksandar-vulin",
+          "founder",
+          "otvoreniVulin"
+        ]
+      ],
+      []
+    ],
+    [
+      "ujedinjeni-regioni-srbije",
+      "Уједињени региони Србије",
+      "Объединённые регионы Сербии",
+      "United Regions of Serbia",
+      "2013-04-21",
+      "mladjan-dinkic",
+      "registered",
+      [],
+      [
+        "g17-plus"
+      ]
+    ],
+    [
+      "g17-plus",
+      "Г17 плус",
+      "Г17 плюс",
+      "G17 Plus",
+      "2002-12-15",
+      "mladjan-dinkic",
+      "deleted-2013-06-10",
+      [],
+      [
+        "ujedinjeni-regioni-srbije"
+      ]
+    ],
+    [
+      "srpski-patriotski-savez",
+      "Српски патриотски савез (СПАС)",
+      "Сербский патриотический союз (СПАС)",
+      "Serbian Patriotic Alliance",
+      "2010-03-20",
+      "aleksandar-sapic",
+      "deleted-2021-05-28",
+      [],
+      [
+        "srpska-napredna-stranka"
+      ]
+    ],
+    [
+      "jugoslovenska-levica",
+      "Југословенска левица (ЈУЛ)",
+      "Югославские левые (ЮЛ)",
+      "Yugoslav Left (JUL)",
+      "1994",
+      null,
+      "historical",
+      [
+        [
+          "mirjana-markovic",
+          "founder",
+          "wpMira"
+        ],
+        [
+          "aleksandar-vulin",
+          "formerMember",
+          "otvoreniVulin"
+        ]
+      ],
+      [
+        "socijalisticka-partija-srbije"
+      ]
+    ],
+    [
+      "gradjanski-savez-srbije",
+      "Грађански савез Србије",
+      "Гражданский союз Сербии",
+      "Civic Alliance of Serbia",
+      "1992",
+      null,
+      "historical",
+      [
+        [
+          "vesna-pesic",
+          "historicalLeader",
+          "history1990"
+        ],
+        [
+          "goran-svilanovic",
+          "historicalLeader",
+          "ceuDOS"
+        ]
+      ],
+      [
+        "liberalno-demokratska-partija"
+      ]
+    ],
+    [
+      "socijaldemokratska-unija",
+      "Социјалдемократска унија",
+      "Социал-демократический союз",
+      "Social Democratic Union",
+      "1996",
+      null,
+      "historical",
+      [
+        [
+          "zarko-korac",
+          "historicalLeader",
+          "ceuDOS"
+        ]
+      ],
+      []
+    ],
+    [
+      "demokratska-alternativa",
+      "Демократска алтернатива",
+      "Демократическая альтернатива",
+      "Democratic Alternative",
+      "1997",
+      null,
+      "historical",
+      [
+        [
+          "nebojsa-covic",
+          "founder",
+          "ceuDOS"
+        ]
+      ],
+      []
+    ],
+    [
+      "stranka-srpskog-jedinstva",
+      "Странка српског јединства",
+      "Партия сербского единства",
+      "Party of Serbian Unity",
+      "1993",
+      null,
+      "historical",
+      [
+        [
+          "zeljko-raznatovic",
+          "founder",
+          "istinomerSSJ"
+        ],
+        [
+          "borislav-pelevic",
+          "historicalLeader",
+          "istinomerSSJ"
+        ]
+      ],
+      [
+        "srpska-radikalna-stranka"
+      ]
+    ],
+    [
+      "nova-demokratija-1990",
+      "Нова демократија",
+      "Новая демократия",
+      "New Democracy (Serbia)",
+      "1990-08-07",
+      null,
+      "historical",
+      [
+        [
+          "dusan-mihajlovic",
+          "historicalLeader",
+          "officialgazette"
+        ]
+      ],
+      [
+        "socijalisticka-partija-srbije",
+        "jugoslovenska-levica"
+      ]
+    ]
+  ],
+  "people": {
+    "aleksandar-cvetkovic": [
+      "Александар Цветковић",
+      "Александр Цветкович",
+      "Aleksandar Cvetković"
+    ],
+    "aleksandar-sapic": [
+      "Александар Шапић",
+      "Александар Шапич",
+      "Aleksandar Šapić"
+    ],
+    "aleksandar-vucic": [
+      "Александар Вучић",
+      "Александар Вучич",
+      "Aleksandar Vučić"
+    ],
+    "aleksandar-vulin": [
+      "Александар Вулин",
+      "Александар Вулин",
+      "Aleksandar Vulin"
+    ],
+    "balint-pastor": [
+      "Балинт Пастор",
+      "Балинт Пастор",
+      "Bálint Pásztor"
+    ],
+    "biljana-djordjevic": [
+      "Биљана Ђорђевић",
+      "Биляна Джорджевич",
+      "Biljana Đorđević"
+    ],
+    "bojan-kostres": [
+      "Бојан Костреш",
+      "Боян Костреш",
+      "Bojan Kostreš"
+    ],
+    "bojan-torbica": [
+      "Бојан Торбица",
+      "Боян Торбица",
+      "Bojan Torbica"
+    ],
+    "boris-tadic": [
+      "Борис Тадић",
+      "Борис Тадич",
+      "Boris Tadić"
+    ],
+    "borislav-pelevic": [
+      "Борислав Пелевић",
+      "Борислав Пелевич",
+      "Borislav Pelević"
+    ],
+    "bosko-obradovic": [
+      "Бошко Обрадовић",
+      "Бошко Обрадович",
+      "Boško Obradović"
+    ],
+    "cedomir-jovanovic": [
+      "Чедомир Јовановић",
+      "Чедомир Йованович",
+      "Čedomir Jovanović"
+    ],
+    "dalibor-markovic": [
+      "Далибор Марковић Палма",
+      "Далибор Маркович Палма",
+      "Dalibor Marković Palma"
+    ],
+    "dejan-zujovic": [
+      "Дејан Жујовић",
+      "Деян Жуйович",
+      "Dejan Žujović"
+    ],
+    "dragan-djilas": [
+      "Драган Ђилас",
+      "Драган Джилас",
+      "Dragan Đilas"
+    ],
+    "dragan-markovic-palma": [
+      "Драган Марковић Палма",
+      "Драган Маркович Палма",
+      "Dragan Marković Palma"
+    ],
+    "dragoljub-micunovic": [
+      "Драгољуб Мићуновић",
+      "Драголюб Мичунович",
+      "Dragoljub Mićunović"
+    ],
+    "dragomir-karic": [
+      "Драгомир Карић",
+      "Драгомир Карич",
+      "Dragomir Karić"
+    ],
+    "goran-svilanovic": [
+      "Горан Свилановић",
+      "Горан Свиланович",
+      "Goran Svilanović"
+    ],
+    "ivan-karic": [
+      "Иван Карић",
+      "Иван Карич",
+      "Ivan Karić"
+    ],
+    "ivan-kostic": [
+      "Иван Костић",
+      "Иван Костич",
+      "Ivan Kostić"
+    ],
+    "ivica-dacic": [
+      "Ивица Дачић",
+      "Ивица Дачич",
+      "Ivica Dačić"
+    ],
+    "jug-radivojevic": [
+      "Југ Радивојевић",
+      "Юг Радивоевич",
+      "Jug Radivojević"
+    ],
+    "milan-krkobabic": [
+      "Милан Кркобабић",
+      "Милан Кркобабич",
+      "Milan Krkobabić"
+    ],
+    "milan-stamatovic": [
+      "Милан Стаматовић",
+      "Милан Стаматович",
+      "Milan Stamatović"
+    ],
+    "milica-djurdjevic-stamenkovski": [
+      "Милица Ђурђевић Стаменковски",
+      "Милица Джурджевич-Стаменковски",
+      "Milica Đurđević Stamenkovski"
+    ],
+    "milos-jovanovic": [
+      "Милош Јовановић",
+      "Милош Йованович",
+      "Miloš Jovanović"
+    ],
+    "milos-vucevic": [
+      "Милош Вучевић",
+      "Милош Вучевич",
+      "Miloš Vučević"
+    ],
+    "mirjana-markovic": [
+      "Мирјана Марковић",
+      "Мирьяна Маркович",
+      "Mirjana Marković"
+    ],
+    "miroslav-aleksic": [
+      "Мирослав Алексић",
+      "Мирослав Алексич",
+      "Miroslav Aleksić"
+    ],
+    "mladjan-dinkic": [
+      "Млађан Динкић",
+      "Младжан Динкич",
+      "Mlađan Dinkić"
+    ],
+    "muamer-zukorlic": [
+      "Муамер Зукорлић",
+      "Муамер Зукорлич",
+      "Muamer Zukorlić"
+    ],
+    "nebojsa-covic": [
+      "Небојша Човић",
+      "Небойша Чович",
+      "Nebojša Čović"
+    ],
+    "nenad-canak": [
+      "Ненад Чанак",
+      "Ненад Чанак",
+      "Nenad Čanak"
+    ],
+    "pavle-grbovic": [
+      "Павле Грбовић",
+      "Павле Грбович",
+      "Pavle Grbović"
+    ],
+    "rade-savic": [
+      "Раде Савић",
+      "Раде Савич",
+      "Rade Savić"
+    ],
+    "rasim-ljajic": [
+      "Расим Љајић",
+      "Расим Ляич",
+      "Rasim Ljajić"
+    ],
+    "samir-lekic": [
+      "Самир Лекић",
+      "Самир Лекич",
+      "Samir Lekić"
+    ],
+    "sasa-radulovic": [
+      "Саша Радуловић",
+      "Саша Радулович",
+      "Saša Radulović"
+    ],
+    "slobodan-milosevic": [
+      "Слободан Милошевић",
+      "Слободан Милошевич",
+      "Slobodan Milošević"
+    ],
+    "slobodan-nikolic": [
+      "Слободан Николић",
+      "Слободан Николич",
+      "Slobodan Nikolić"
+    ],
+    "srdjan-milivojevic": [
+      "Срђан Миливојевић",
+      "Срджан Миливоевич",
+      "Srđan Milivojević"
+    ],
+    "stefan-marinkovic": [
+      "Стефан Маринковић",
+      "Стефан Маринкович",
+      "Stefan Marinković"
+    ],
+    "sulejman-ugljanin": [
+      "Сулејман Угљанин",
+      "Сулейман Углянин",
+      "Sulejman Ugljanin"
+    ],
+    "tomislav-nikolic": [
+      "Томислав Николић",
+      "Томислав Николич",
+      "Tomislav Nikolić"
+    ],
+    "tomislav-zigmanov": [
+      "Томислав Жигманов",
+      "Томислав Жигманов",
+      "Tomislav Žigmanov"
+    ],
+    "usame-zukorlic": [
+      "Усаме Зукорлић",
+      "Усаме Зукорлич",
+      "Usame Zukorlić"
+    ],
+    "velimir-ilic": [
+      "Велимир Илић",
+      "Велимир Илич",
+      "Velimir Ilić"
+    ],
+    "vesna-pesic": [
+      "Весна Пешић",
+      "Весна Пешич",
+      "Vesna Pešić"
+    ],
+    "vladimir-gajic": [
+      "Владимир Гајић",
+      "Владимир Гайич",
+      "Vladimir Gajić"
+    ],
+    "vojislav-kostunica": [
+      "Војислав Коштуница",
+      "Воислав Коштуница",
+      "Vojislav Koštunica"
+    ],
+    "vojislav-mihailovic": [
+      "Војислав Михаиловић",
+      "Воислав Михайлович",
+      "Vojislav Mihailović"
+    ],
+    "vojislav-seselj": [
+      "Војислав Шешељ",
+      "Воислав Шешель",
+      "Vojislav Šešelj"
+    ],
+    "vuk-draskovic": [
+      "Вук Драшковић",
+      "Вук Драшкович",
+      "Vuk Drašković"
+    ],
+    "vuk-jeremic": [
+      "Вук Јеремић",
+      "Вук Еремич",
+      "Vuk Jeremić"
+    ],
+    "zarko-korac": [
+      "Жарко Кораћ",
+      "Жарко Корач",
+      "Žarko Korać"
+    ],
+    "zdravko-ponos": [
+      "Здравко Понош",
+      "Здравко Понош",
+      "Zdravko Ponoš"
+    ],
+    "zeljko-raznatovic": [
+      "Жељко Ражнатовић",
+      "Желько Ражнатович",
+      "Željko Ražnatović"
+    ],
+    "zoran-djindjic": [
+      "Зоран Ђинђић",
+      "Зоран Джинджич",
+      "Zoran Đinđić"
+    ],
+    "dusan-mihajlovic": [
+      "Душан Михајловић",
+      "Душан Михайлович",
+      "Dušan Mihajlović"
+    ]
+  },
+  "coalitions": [
+    {
+      "slug": "dos-2000",
+      "name": [
+        "Демократска опозиција Србије",
+        "Демократическая оппозиция Сербии",
+        "Democratic Opposition of Serbia"
+      ],
+      "period": "2000–2003",
+      "kind": "electoral coalition",
+      "source": "https://www.ebrd.com/downloads/about/policies/serbia-2007-tr.pdf"
+    }
+  ]
+}
