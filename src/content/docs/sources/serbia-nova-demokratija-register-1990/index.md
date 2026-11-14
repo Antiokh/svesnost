@@ -6,10 +6,7 @@ entityId: source:serbia-nova-demokratija-register-1990
 sourceType: document
 sourceUrl: https://slgl.pravno-informacioni-sistem.rs/api/Prins/viewAct/673504
 author: "Министарство правде Републике Србије"
-published:
-  year: 2000
-  month: 4
-  day: 21
+published: 2000-04-21
 locator: Issue 13/2000, p. 435, entry 11
 ---
 

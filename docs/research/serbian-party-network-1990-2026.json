@@ -119,6 +119,12 @@
       "name": "RTS, Rasim Ljajić and Jug Radivojević, 2 August 2026",
       "type": "publication",
       "date": "2026-08-02"
+    },
+    "officialgazette": {
+      "url": "https://slgl.pravno-informacioni-sistem.rs/api/Prins/viewAct/673504",
+      "name": "Službeni glasnik RS 13/2000, registry entries",
+      "type": "document",
+      "date": "2000-04-21"
     }
   },
   "parties": [
@@ -802,6 +808,26 @@
       [
         "srpska-radikalna-stranka"
       ]
+    ],
+    [
+      "nova-demokratija-1990",
+      "Нова демократија",
+      "Новая демократия",
+      "New Democracy (Serbia)",
+      "1990-08-07",
+      null,
+      "historical",
+      [
+        [
+          "dusan-mihajlovic",
+          "historicalLeader",
+          "officialgazette"
+        ]
+      ],
+      [
+        "socijalisticka-partija-srbije",
+        "jugoslovenska-levica"
+      ]
     ]
   ],
   "people": {
@@ -1099,6 +1125,24 @@
       "Зоран Ђинђић",
       "Зоран Джинджич",
       "Zoran Đinđić"
+    ],
+    "dusan-mihajlovic": [
+      "Душан Михајловић",
+      "Душан Михайлович",
+      "Dušan Mihajlović"
     ]
-  }
+  },
+  "coalitions": [
+    {
+      "slug": "dos-2000",
+      "name": [
+        "Демократска опозиција Србије",
+        "Демократическая оппозиция Сербии",
+        "Democratic Opposition of Serbia"
+      ],
+      "period": "2000–2003",
+      "kind": "electoral coalition",
+      "source": "https://www.ebrd.com/downloads/about/policies/serbia-2007-tr.pdf"
+    }
+  ]
 }

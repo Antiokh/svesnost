@@ -20,4 +20,4 @@ sidebar:
 - [Party-system overview](/en/materials/serbian-parties-1990-2026/)
 
 [^1]: **Source** — [РТС, Peti oktobar, deceniju posle](https://www.rts.rs/lat/vesti/drustvo/774840/peti-oktobar-deceniju-posle.html), 5.10.2010.
-[^2]: **Source** — [Academic study, DOS coalition, historical membership](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf), 2009, section III. The academic study is a secondary source.
+[^2]: **Source** — [EBRD, Serbia strategy, Annex 3: Political Assessment](https://www.ebrd.com/downloads/about/policies/serbia-2007-tr.pdf), 2007, Annex 3, p. 45. This is an institutional analytical source.

@@ -20,4 +20,4 @@ sidebar:
 - [Историјски преглед](/materials/serbian-parties-1990-2026/)
 
 [^1]: **Извор** — [РТС, Peti oktobar, deceniju posle](https://www.rts.rs/lat/vesti/drustvo/774840/peti-oktobar-deceniju-posle.html), 5.10.2010.
-[^2]: **Извор** — [Academic study, DOS coalition, historical membership](https://dspace.lib.uom.gr/bitstream/2159/13872/1/Karakinaris_Msc2009.pdf), 2009, section III. Академски преглед је секундарни извор.
+[^2]: **Извор** — [EBRD, Serbia strategy, Annex 3: Political Assessment](https://www.ebrd.com/downloads/about/policies/serbia-2007-tr.pdf), 2007, Annex 3, p. 45. Ово је аналитичка публикација међународне финансијске институције.
